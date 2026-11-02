@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  LEAD
+  EMPLOYEE
+}
+
+enum Half {
+  FULL
+  FIRST
+  SECOND
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LedgerKind {
+  OPENING
+  MONTHLY_CREDIT
+  YEARLY_CREDIT
+  LEAVE
+  REFUND
+  CARRY_FORWARD
+  EXPIRY
+  MANUAL
+}
+
+model User {
+  id                 Int            @id @default(autoincrement())
+  employeeId         String         @unique
+  name               String
+  email              String         @unique
+  passwordHash       String
+  role               Role           @default(EMPLOYEE)
+  departmentId       Int?
+  department         Department?    @relation(fields: [departmentId], references: [id])
+  managerId          Int?
+  manager            User?          @relation("Reports", fields: [managerId], references: [id])
+  reports            User[]         @relation("Reports")
+  joiningDate        DateTime       @db.Date
+  isActive           Boolean        @default(true)
+  mustChangePassword Boolean        @default(true)
+  createdAt          DateTime       @default(now())
+  leaves             LeaveRequest[] @relation("Applicant")
+  decisions          LeaveRequest[] @relation("Approver")
+  ledger             LeaveLedger[]  @relation("LedgerUser")
+  ledgerEntries      LeaveLedger[]  @relation("LedgerCreator")
+  documents          Document[]
+  passwordResets     PasswordReset[]
+}
+
+model Department {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  users User[]
+}
+
+model LeaveType {
+  id                  Int            @id @default(autoincrement())
+  code                String         @unique
+  name                String
+  monthlyCredit       Decimal        @default(0) @db.Decimal(4, 1)
+  yearlyQuota         Decimal        @default(0) @db.Decimal(4, 1)
+  maxCarryForward     Decimal        @default(0) @db.Decimal(4, 1)
+  needsBalance        Boolean        @default(true)
+  allowHalfDay        Boolean        @default(true)
+  sandwichCounts      Boolean        @default(false)
+  backdateDays        Int            @default(0)
+  noticeDays          Int            @default(0)
+  optionalHolidayOnly Boolean        @default(false)
+  isActive            Boolean        @default(true)
+  requests            LeaveRequest[]
+  ledger              LeaveLedger[]
+}
+
+model LeaveLedger {
+  id             Int           @id @default(autoincrement())
+  userId         Int
+  user           User          @relation("LedgerUser", fields: [userId], references: [id])
+  leaveTypeId    Int
+  leaveType      LeaveType     @relation(fields: [leaveTypeId], references: [id])
+  days           Decimal       @db.Decimal(5, 1)
+  kind           LedgerKind
+  // e.g. "2026-11" for monthly credit, "2026" for yearly; null for one-off rows
+  period         String?
+  leaveRequestId Int?
+  leaveRequest   LeaveRequest? @relation(fields: [leaveRequestId], references: [id])
+  note           String?
+  createdById    Int?
+  createdBy      User?         @relation("LedgerCreator", fields: [createdById], references: [id])
+  createdAt      DateTime      @default(now())
+
+  // Scheduled jobs are safe to re-run: one credit per user/type/kind/period.
+  @@unique([userId, leaveTypeId, kind, period])
+  @@index([userId, leaveTypeId])
+}
+
+model LeaveRequest {
+  id             Int           @id @default(autoincrement())
+  userId         Int
+  user           User          @relation("Applicant", fields: [userId], references: [id])
+  leaveTypeId    Int
+  leaveType      LeaveType     @relation(fields: [leaveTypeId], references: [id])
+  startDate      DateTime      @db.Date
+  endDate        DateTime      @db.Date
+  startHalf      Half          @default(FULL)
+  endHalf        Half          @default(FULL)
+  days           Decimal       @db.Decimal(4, 1)
+  reason         String
+  note           String?
+  ccEmails       String[]
+  status         LeaveStatus   @default(PENDING)
+  approverId     Int?
+  approver       User?         @relation("Approver", fields: [approverId], references: [id])
+  decisionReason String?
+  decidedAt      DateTime?
+  gcalEventId    String?
+  createdAt      DateTime      @default(now())
+  ledger         LeaveLedger[]
+
+  @@index([userId, status])
+}
+
+model Holiday {
+  id         Int      @id @default(autoincrement())
+  date       DateTime @unique @db.Date
+  name       String
+  isOptional Boolean  @default(false)
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
+
+model Document {
+  id           Int      @id @default(autoincrement())
+  title        String
+  filePath     String
+  uploadedById Int
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  tokenHash String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+}
