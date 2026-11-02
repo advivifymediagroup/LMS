@@ -8,10 +8,12 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     ["/dashboard", "Dashboard"],
     ["/leaves/apply", "Apply leave"],
     ["/leaves", "Leave history"],
+    ["/calendar", "Calendar"],
     ...(user.role !== "EMPLOYEE" ? ([["/approvals", "Approvals"]] as [string, string][]) : []),
+    ["/documents", "Policies"],
     ["/profile", "Profile"],
     ...(user.role === "ADMIN"
-      ? ([["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"], ["/admin/leave-types", "Leave types"], ["/admin/holidays", "Holidays"], ["/admin/settings", "Settings"]] as [string, string][])
+      ? ([["/admin/reports", "Reports"], ["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"], ["/admin/leave-types", "Leave types"], ["/admin/holidays", "Holidays"], ["/admin/settings", "Settings"]] as [string, string][])
       : []),
   ];
   return (

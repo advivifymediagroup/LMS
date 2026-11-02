@@ -159,7 +159,10 @@ model Setting {
 model Document {
   id           Int      @id @default(autoincrement())
   title        String
-  filePath     String
+  fileName     String
+  size         Int
+  // Stored in the DB so backups cover it and there's no upload folder to manage. PDFs only, ≤10 MB.
+  data         Bytes
   uploadedById Int
   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime @default(now())

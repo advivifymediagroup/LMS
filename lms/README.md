@@ -13,13 +13,13 @@ npm run db:up               # Postgres on localhost:5433, Mailpit on localhost:8
 npm run db:migrate          # apply schema
 npm run db:seed             # sample users, leave types, holidays
 npm run dev                 # http://localhost:3000
-npm test                    # day-count unit tests
+npm test                    # unit tests (day count, CSV)
 ```
 
 Seed logins (dev only): `ADM001`, `LEAD001`, `LEAD002`, `EMP001`–`EMP005`, or their `@example.com` emails.
 Password for all: `Welcome@123`. `EMP005` joined 2026-09-15, so they're on probation (paid leave blocked).
 
-## What's built (Phases 0–2)
+## What's built (Phases 0–3)
 
 - Login with Employee ID or email; forced password change for new/reset users
 - Roles: Admin, Team Lead, Employee. Every page and server action checks the role (`requireUser` in `lib/auth.ts`)
@@ -30,6 +30,9 @@ Password for all: `Welcome@123`. `EMP005` joined 2026-09-15, so they're on proba
 - Emails (`lib/notify.ts`): applied (to approver + HR/Finance, CC teammates), approved/rejected, cancelled, reminder digest, password reset. SMTP is set in Admin → Settings; in dev, Mailpit catches everything
 - Admin pages for leave types, holidays (fixed / optional) and settings
 - Dashboards per role, leave history with filters, forgot-password by email
+- Leave calendar (`/calendar`): month view of approved and pending leave plus holidays. Employees and leads see their department; admins see everyone or one department
+- Reports (`/admin/reports`): approved days per employee and leave type for a date range, by department, with CSV download
+- Policy documents (`/documents`): admins upload, replace and delete PDFs (content-checked, up to 10 MB, stored in the database); everyone can view and download
 
 ## Policy rules (AMG Leave Calendar and Policy 2026)
 
@@ -47,6 +50,6 @@ Code: day count in `lib/leave-days.ts` (tested), checks in `lib/leave.ts` (`chec
 
 ## Not yet built
 
-- Phase 3: calendar view, reports, policy documents (Google Calendar sync deferred: app-only for now)
+- Google Calendar sync (deferred: the calendar is in-app only for now)
 - Phase 4: login rate limiting, deploy
 - Sandwich across two separate requests (e.g. Fri leave + Mon leave) isn't counted yet; the policy is still being decided
