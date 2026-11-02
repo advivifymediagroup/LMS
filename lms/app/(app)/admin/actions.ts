@@ -36,7 +36,7 @@ export async function saveUser(id: number | null, _: FormState, form: FormData):
 
   try {
     if (id) {
-      await db.user.update({ where: { id }, data: { ...data, isActive: form.get("isActive") === "on" } });
+      await db.user.update({ where: { id }, data: { ...data, isActive: form.get("isActive") === "on", onNoticePeriod: form.get("onNoticePeriod") === "on" } });
       revalidatePath("/admin/users");
       return { ok: "Saved." };
     }

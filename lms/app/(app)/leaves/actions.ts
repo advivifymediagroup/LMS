@@ -2,11 +2,13 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { checkLeave, fromIso, getBalances, todayIso, type LeaveCheck } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
+import { notifyApplied, notifyCancelled, notifyDecision } from "@/lib/notify";
 
 const half = z.enum(["FULL", "FIRST", "SECOND"]);
 const inputSchema = z.object({
@@ -81,6 +83,7 @@ export async function applyLeave(_: string | null, form: FormData): Promise<stri
     }
     return created;
   });
+  after(() => notifyApplied(leave.id));
   revalidatePath("/", "layout");
   redirect(`/leaves/${leave.id}`);
 }
@@ -93,7 +96,7 @@ export async function cancelLeave(id: number) {
   const canCancel = leave.status === "PENDING" || (leave.status === "APPROVED" && toIso(leave.startDate) > today);
   if (!canCancel) redirect(`/leaves/${id}?error=This leave can no longer be cancelled`);
 
-  await db.$transaction(async (tx) => {
+  const cancelled = await db.$transaction(async (tx) => {
     // Guard against double-submit: only flip if still in the status we checked.
     const { count } = await tx.leaveRequest.updateMany({ where: { id, status: leave.status }, data: { status: "CANCELLED" } });
     if (count && leave.status === "APPROVED" && leave.leaveType.needsBalance) {
@@ -101,7 +104,9 @@ export async function cancelLeave(id: number) {
         data: { userId: user.id, leaveTypeId: leave.leaveTypeId, days: leave.days, kind: "REFUND", leaveRequestId: id, note: "Cancelled" },
       });
     }
+    return count > 0;
   });
+  if (cancelled) after(() => notifyCancelled(id, leave.status === "APPROVED"));
   revalidatePath("/", "layout");
   redirect(`/leaves/${id}`);
 }
@@ -123,7 +128,7 @@ export async function decideLeave(id: number, form: FormData) {
     if ((bal?.available ?? 0) < Number(leave!.days)) back(`Not enough balance left for ${leave!.user.name} to approve this.`);
   }
 
-  await db.$transaction(async (tx) => {
+  const decided = await db.$transaction(async (tx) => {
     const { count } = await tx.leaveRequest.updateMany({
       where: { id, status: "PENDING" },
       data: {
@@ -138,7 +143,9 @@ export async function decideLeave(id: number, form: FormData) {
         data: { userId: leave!.userId, leaveTypeId: leave!.leaveTypeId, days: -Number(leave!.days), kind: "LEAVE", leaveRequestId: id },
       });
     }
+    return count > 0;
   });
+  if (decided) after(() => notifyDecision(id));
   revalidatePath("/", "layout");
   redirect("/approvals");
 }

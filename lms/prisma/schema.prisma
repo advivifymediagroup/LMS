@@ -51,6 +51,7 @@ model User {
   reports            User[]         @relation("Reports")
   joiningDate        DateTime       @db.Date
   isActive           Boolean        @default(true)
+  onNoticePeriod     Boolean        @default(false)
   mustChangePassword Boolean        @default(true)
   createdAt          DateTime       @default(now())
   leaves             LeaveRequest[] @relation("Applicant")
@@ -72,13 +73,23 @@ model LeaveType {
   code                String         @unique
   name                String
   monthlyCredit       Decimal        @default(0) @db.Decimal(4, 1)
+  // Credited each January; pro-rated for joiners in their first year.
   yearlyQuota         Decimal        @default(0) @db.Decimal(4, 1)
-  maxCarryForward     Decimal        @default(0) @db.Decimal(4, 1)
+  // Balance above this expires at year end. null = never expires.
+  maxCarryForward     Decimal?       @db.Decimal(4, 1)
   needsBalance        Boolean        @default(true)
   allowHalfDay        Boolean        @default(true)
   sandwichCounts      Boolean        @default(false)
   backdateDays        Int            @default(0)
   noticeDays          Int            @default(0)
+  // Leaves longer than longLeaveDays need longNoticeDays' notice instead of noticeDays.
+  longLeaveDays       Int?
+  longNoticeDays      Int            @default(0)
+  // Can't be applied during probation (monthly credits are held until it ends) / notice period.
+  blockedOnProbation  Boolean        @default(false)
+  blockedOnNotice     Boolean        @default(false)
+  // Show a medical-certificate reminder above this many days.
+  certificateAfterDays Int?
   optionalHolidayOnly Boolean        @default(false)
   isActive            Boolean        @default(true)
   requests            LeaveRequest[]

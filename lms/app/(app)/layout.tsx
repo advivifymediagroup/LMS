@@ -7,11 +7,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const links: [string, string][] = [
     ["/dashboard", "Dashboard"],
     ["/leaves/apply", "Apply leave"],
-    ["/leaves", "My leaves"],
+    ["/leaves", "Leave history"],
     ...(user.role !== "EMPLOYEE" ? ([["/approvals", "Approvals"]] as [string, string][]) : []),
     ["/profile", "Profile"],
     ...(user.role === "ADMIN"
-      ? ([["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"]] as [string, string][])
+      ? ([["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"], ["/admin/leave-types", "Leave types"], ["/admin/holidays", "Holidays"], ["/admin/settings", "Settings"]] as [string, string][])
       : []),
   ];
   return (

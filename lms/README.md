@@ -9,7 +9,7 @@ Needs Node 24 and Docker Desktop.
 ```bash
 npm install
 cp .env.example .env        # then set SESSION_SECRET (command is in the file)
-npm run db:up               # Postgres on localhost:5433
+npm run db:up               # Postgres on localhost:5433, Mailpit on localhost:8025
 npm run db:migrate          # apply schema
 npm run db:seed             # sample users, leave types, holidays
 npm run dev                 # http://localhost:3000
@@ -19,29 +19,34 @@ npm test                    # day-count unit tests
 Seed logins (dev only): `ADM001`, `LEAD001`, `LEAD002`, `EMP001`–`EMP005`, or their `@example.com` emails.
 Password for all: `Welcome@123`. `EMP005` joined 2026-09-15, so they're on probation (paid leave blocked).
 
-## What's built (Phase 0 + 1)
+## What's built (Phases 0–2)
 
 - Login with Employee ID or email; forced password change for new/reset users
 - Roles: Admin, Team Lead, Employee. Every page and server action checks the role (`requireUser` in `lib/auth.ts`)
 - Admin: users (create/edit/deactivate, reset password), departments, CSV import with opening balances, manual balance adjustments
 - Apply leave with live day count and balance preview; approvals for leads (direct reports) and admins (everyone); cancel with refund
 - Balances = sum of `LeaveLedger` rows. Every credit, deduction, refund and adjustment is a row, shown on the profile page
+- Background jobs (`lib/jobs.ts`, started from `instrumentation.ts`, hourly): monthly CL credit, yearly SL/OL quota (pro-rated for joiners), year-end expiry above the carry-forward cap, 9:00 daily pending-approval reminder. All are safe to re-run. Admin → Settings has "Run jobs now"
+- Emails (`lib/notify.ts`): applied (to approver + HR/Finance, CC teammates), approved/rejected, cancelled, reminder digest, password reset. SMTP is set in Admin → Settings; in dev, Mailpit catches everything
+- Admin pages for leave types, holidays (fixed / optional) and settings
+- Dashboards per role, leave history with filters, forgot-password by email
 
-## Policy rules (from the decisions doc)
+## Policy rules (AMG Leave Calendar and Policy 2026)
 
-| Rule | Where |
+| Type | Rule |
 | --- | --- |
-| Day count, half days, sandwich | `lib/leave-days.ts` (`countLeaveDays`, tested) |
-| Notice, backdating, probation, optional-holiday-only, overlap, balance | `lib/leave.ts` (`checkLeave`) |
-| Per-type settings (credit, notice, backdate, sandwich, half-day) | `LeaveType` table; admin UI comes in Phase 2 |
-| Working days, timezone, probation months | `Setting` table |
+| CL | 1/month, never expires. 2 days' notice; more than 2 days needs 5 days'. Blocked on probation and notice period. Sandwich counts |
+| SL | 8/year, lapses at year end. Can be backdated 7 days. Certificate warning above 3 days |
+| OL | 5/year, lapses at year end. Only on optional holidays, 1 day's notice |
+| LWP | No balance needed; shown as unpaid. Sandwich counts |
 
-Seeded leave-type numbers and holidays are placeholders. Replace them with the real policy.
+All numbers are editable in Admin → Leave types. Holidays are the 2026 list. Automatic credits start from `creditsFrom` (2026-12); opening balances cover the time before.
+Probation joiners get their CL months credited once probation ends.
+
+Code: day count in `lib/leave-days.ts` (tested), checks in `lib/leave.ts` (`checkLeave`).
 
 ## Not yet built
 
-- Phase 2: monthly credit / year-end jobs, emails, leave-type / holiday / settings admin UI, history filters
 - Phase 3: calendar view, reports, policy documents (Google Calendar sync deferred: app-only for now)
 - Phase 4: login rate limiting, deploy
-- Forgot-password by email (needs SMTP, Phase 2). Until then admins reset passwords
 - Sandwich across two separate requests (e.g. Fri leave + Mon leave) isn't counted yet; the policy is still being decided

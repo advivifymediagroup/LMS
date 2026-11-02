@@ -1,9 +1,12 @@
 "use server";
 
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSession, passwordProblem, requireUser } from "@/lib/auth";
+import { appUrl, sendPasswordReset } from "@/lib/notify";
 
 export async function login(_: string | null, form: FormData): Promise<string | null> {
   const id = String(form.get("identifier") ?? "").trim();
@@ -44,4 +47,39 @@ export async function changePassword(_: string | null, form: FormData): Promise<
     data: { passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false },
   });
   redirect("/dashboard");
+}
+
+// ---------- Forgot / reset password ----------
+
+const hashToken = (t: string) => crypto.createHash("sha256").update(t).digest("hex");
+const RESET_SENT = "If that account exists, a reset link is on its way to its email.";
+
+export async function requestPasswordReset(_: string | null, form: FormData): Promise<string | null> {
+  const id = String(form.get("identifier") ?? "").trim();
+  if (!id) return "Enter your Employee ID or email.";
+  const user = await db.user.findFirst({
+    where: { isActive: true, OR: [{ employeeId: id.toUpperCase() }, { email: { equals: id, mode: "insensitive" } }] },
+  });
+  if (user) {
+    const token = crypto.randomBytes(32).toString("base64url");
+    await db.passwordReset.deleteMany({ where: { userId: user.id } });
+    await db.passwordReset.create({ data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
+    // Sent after the response so timing doesn't reveal whether the account exists.
+    after(() => sendPasswordReset(user, appUrl(`/reset-password?token=${token}`)));
+  }
+  return RESET_SENT;
+}
+
+export async function resetPasswordWithToken(token: string, _: string | null, form: FormData): Promise<string | null> {
+  const reset = await db.passwordReset.findUnique({ where: { tokenHash: hashToken(token) } });
+  if (!reset || reset.expiresAt < new Date()) return "This link is invalid or has expired. Ask for a new one.";
+  const next = String(form.get("next") ?? "");
+  if (next !== form.get("confirm")) return "Passwords don't match.";
+  const problem = passwordProblem(next);
+  if (problem) return problem;
+  await db.$transaction([
+    db.user.update({ where: { id: reset.userId }, data: { passwordHash: await bcrypt.hash(next, 10), mustChangePassword: false } }),
+    db.passwordReset.deleteMany({ where: { userId: reset.userId } }),
+  ]);
+  redirect("/login?reset=1");
 }

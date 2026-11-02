@@ -1,5 +1,6 @@
-// Dev seed. Safe to re-run. Run: npm run db:seed
-// Holidays and leave-type numbers are placeholders: replace with the real policy.
+// Dev seed. Safe to re-run (existing rows are left alone). Run: npm run db:seed
+// Leave types and holidays follow "AMG Leave Calendar and Policy 2026".
+// Sample users and balances are fake.
 import { PrismaClient, type Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -13,30 +14,71 @@ async function main() {
     workingDays: [1, 2, 3, 4, 5],
     timezone: "Asia/Kolkata",
     probationMonths: 3,
+    // Automatic credits start from this month; opening balances cover everything before it.
+    creditsFrom: "2026-12",
+    // Policy: every application is also sent to HR and Finance.
+    notifyAlways: ["anuranjana@advivifymediagroup.com", "finance@advivifymediagroup.com"],
+    // Dev: Mailpit from docker-compose catches all mail (http://localhost:8025).
+    smtp: { host: "localhost", port: 1025, secure: false, user: "", pass: "", from: "Leave Management <lms@advivifymediagroup.com>" },
   })) {
     await db.setting.upsert({ where: { key }, update: {}, create: { key, value } });
   }
 
   const types = [
-    { code: "CL", name: "Casual Leave", monthlyCredit: 1, maxCarryForward: 5, noticeDays: 3, sandwichCounts: true },
-    { code: "SL", name: "Sick Leave", monthlyCredit: 0.5, backdateDays: 7 },
-    { code: "OL", name: "Optional Leave", yearlyQuota: 5, noticeDays: 3, allowHalfDay: false, optionalHolidayOnly: true },
-    { code: "LWP", name: "Leave Without Pay", needsBalance: false, noticeDays: 3, sandwichCounts: true },
+    {
+      code: "CL", name: "Casual Leave", monthlyCredit: 1, maxCarryForward: null,
+      noticeDays: 2, longLeaveDays: 2, longNoticeDays: 5,
+      blockedOnProbation: true, blockedOnNotice: true, sandwichCounts: true,
+    },
+    { code: "SL", name: "Sick Leave", yearlyQuota: 8, maxCarryForward: 0, backdateDays: 7, certificateAfterDays: 3 },
+    { code: "OL", name: "Optional Leave", yearlyQuota: 5, maxCarryForward: 0, noticeDays: 1, optionalHolidayOnly: true },
+    { code: "LWP", name: "Leave Without Pay", needsBalance: false, sandwichCounts: true },
   ];
-  for (const t of types) await db.leaveType.upsert({ where: { code: t.code }, update: {}, create: t });
+  // Every field spelled out, so re-seeding resets a type fully to policy.
+  const defaults = {
+    monthlyCredit: 0, yearlyQuota: 0, maxCarryForward: null as number | null, needsBalance: true, allowHalfDay: true,
+    sandwichCounts: false, backdateDays: 0, noticeDays: 0, longLeaveDays: null as number | null, longNoticeDays: 0,
+    blockedOnProbation: false, blockedOnNotice: false, certificateAfterDays: null as number | null, optionalHolidayOnly: false, isActive: true,
+  };
+  for (const t of types) {
+    const data = { ...defaults, ...t };
+    await db.leaveType.upsert({ where: { code: t.code }, update: data, create: data });
+  }
 
-  const holidays = [
-    ["2026-01-26", "Republic Day", false],
-    ["2026-08-15", "Independence Day", false],
-    ["2026-10-02", "Gandhi Jayanti", false],
-    ["2026-11-24", "Guru Nanak Jayanti", true],
-    ["2026-12-24", "Christmas Eve", true],
-    ["2026-12-25", "Christmas", false],
-    ["2027-01-14", "Makar Sankranti", true],
-    ["2027-01-26", "Republic Day", false],
-  ] as const;
-  for (const [date, name, isOptional] of holidays) {
-    await db.holiday.upsert({ where: { date: d(date) }, update: {}, create: { date: d(date), name, isOptional } });
+  const fixed: [string, string][] = [
+    ["2026-01-01", "New Year"],
+    ["2026-01-26", "Republic Day"],
+    ["2026-03-04", "Holi"],
+    ["2026-05-01", "Labour Day / Buddha Purnima"],
+    ["2026-08-15", "Independence Day"],
+    ["2026-10-02", "Gandhi Jayanti"],
+    ["2026-11-07", "Choti Diwali"],
+    ["2026-11-08", "Diwali"],
+    ["2026-12-25", "Christmas"],
+  ];
+  const optional: [string, string][] = [
+    ["2026-01-14", "Makar Sankranti"],
+    ["2026-01-23", "Basant Panchami"],
+    ["2026-02-15", "Maha Shivratri"],
+    ["2026-03-03", "Holika Dahan"],
+    ["2026-03-19", "Eid ul-Fitr (tentative)"],
+    ["2026-04-03", "Good Friday"],
+    ["2026-05-27", "Bakra Eid"],
+    ["2026-06-30", "Guru Purnima"],
+    ["2026-07-15", "Muharram (tentative)"],
+    ["2026-08-23", "Raksha Bandhan"],
+    ["2026-09-04", "Janmashtami"],
+    ["2026-09-14", "Ganesh Chaturthi"],
+    ["2026-10-20", "Dussehra (Vijaya Dashami)"],
+    ["2026-10-27", "Karva Chauth"],
+    ["2026-11-09", "Bhai Dooj"],
+    ["2026-11-18", "Chhath Puja"],
+    ["2026-11-24", "Guru Nanak Jayanti"],
+  ];
+  for (const [list, isOptional] of [[fixed, false], [optional, true]] as const) {
+    for (const [date, name] of list) {
+      await db.holiday.upsert({ where: { date: d(date) }, update: { name, isOptional }, create: { date: d(date), name, isOptional } });
+    }
   }
 
   const eng = await db.department.upsert({ where: { name: "Engineering" }, update: {}, create: { name: "Engineering" } });
@@ -66,19 +108,15 @@ async function main() {
     await user("EMP005", "Vikram Sales (on probation)", "EMPLOYEE", sales.id, salesLead.id, "2026-09-15"),
   ];
 
+  // Opening balances as of launch. The probation joiner gets none: the monthly job credits them.
   const typeIds = Object.fromEntries((await db.leaveType.findMany()).map((t) => [t.code, t.id]));
-  for (const u of [admin, engLead, salesLead, ...staff]) {
-    const rows = [
-      { code: "CL", days: 6, kind: "OPENING" as const, period: "opening" },
-      { code: "SL", days: 4, kind: "OPENING" as const, period: "opening" },
-      { code: "OL", days: 5, kind: "YEARLY_CREDIT" as const, period: "2026" },
-    ];
-    for (const r of rows) {
-      const key = { userId: u.id, leaveTypeId: typeIds[r.code], kind: r.kind, period: r.period };
+  for (const u of [admin, engLead, salesLead, ...staff.slice(0, 4)]) {
+    for (const [code, days] of [["CL", 6], ["SL", 4], ["OL", 3]] as const) {
+      const key = { userId: u.id, leaveTypeId: typeIds[code], kind: "OPENING" as const, period: "opening" };
       await db.leaveLedger.upsert({
         where: { userId_leaveTypeId_kind_period: key },
         update: {},
-        create: { ...key, days: r.days, note: "Seed balance" },
+        create: { ...key, days, note: "Seed balance" },
       });
     }
   }

@@ -6,7 +6,7 @@ import type { FormState } from "../actions";
 type Option = { id: number; name: string };
 type UserValues = {
   employeeId: string; name: string; email: string; role: string;
-  departmentId: number | null; managerId: number | null; joiningDate: string; isActive: boolean;
+  departmentId: number | null; managerId: number | null; joiningDate: string; isActive: boolean; onNoticePeriod: boolean;
 };
 
 export function UserForm({ user, departments, managers, action }: {
@@ -67,6 +67,11 @@ export function UserForm({ user, departments, managers, action }: {
         {user && (
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input type="checkbox" name="isActive" defaultChecked={user.isActive} /> Active (untick when someone leaves; history is kept)
+          </label>
+        )}
+        {user && (
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="onNoticePeriod" defaultChecked={user.onNoticePeriod} /> Serving notice period (blocks Casual Leave)
           </label>
         )}
       </div>

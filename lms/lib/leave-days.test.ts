@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { countLeaveDays, type DayCountOptions } from "./leave-days.ts";
+import { countLeaveDays, firstCreditMonth, monthRange, proRatedQuota, type DayCountOptions } from "./leave-days.ts";
 
 // 2026-11-02 is a Monday.
 const base: DayCountOptions = { workingDays: [1, 2, 3, 4, 5], holidays: new Set(), sandwichCounts: false };
@@ -43,4 +43,22 @@ test("half day on a non-working edge changes nothing", () => {
 
 test("end before start = 0", () => {
   assert.equal(countLeaveDays("2026-11-05", "2026-11-02", F, F, base), 0);
+});
+
+test("joiners by the 15th earn credit that month, later joiners from the next", () => {
+  assert.equal(firstCreditMonth("2026-03-15"), "2026-03");
+  assert.equal(firstCreditMonth("2026-03-16"), "2026-04");
+  assert.equal(firstCreditMonth("2026-12-20"), "2027-01");
+});
+
+test("month range is inclusive and crosses years", () => {
+  assert.deepEqual(monthRange("2026-11", "2027-02"), ["2026-11", "2026-12", "2027-01", "2027-02"]);
+  assert.deepEqual(monthRange("2026-05", "2026-04"), []);
+});
+
+test("yearly quota is pro-rated by months left, rounded down to 0.5", () => {
+  assert.equal(proRatedQuota(8, "2026-01"), 8);
+  assert.equal(proRatedQuota(8, "2026-07"), 4);
+  assert.equal(proRatedQuota(5, "2026-10"), 1);   // 5 * 3/12 = 1.25
+  assert.equal(proRatedQuota(8, "2026-12"), 0.5); // 0.67
 });
