@@ -102,7 +102,7 @@ export function ApplyForm({ types, today }: { types: TypeOption[]; today: string
         <textarea className="input" id="note" name="note" rows={2} maxLength={1000} />
       </div>
 
-      <button className="btn btn-primary" disabled={pending || (preview !== null && !preview.ok)}>
+      <button className="btn btn-primary hover:cursor-pointer" disabled={pending || (preview !== null && !preview.ok)}>
         {pending ? "Submitting…" : "Submit request"}
       </button>
     </form>

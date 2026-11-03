@@ -47,7 +47,7 @@ export default async function LeaveDetailPage({ params, searchParams }: PageProp
       </dl>
       {canCancel && (
         <form action={cancelLeave.bind(null, leave.id)}>
-          <button className="btn btn-danger">
+          <button className="btn btn-danger hover:cursor-pointer">
             Cancel this leave{leave.status === "APPROVED" && leave.leaveType.needsBalance ? " (days go back to your balance)" : ""}
           </button>
         </form>
