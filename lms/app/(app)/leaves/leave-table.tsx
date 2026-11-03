@@ -12,7 +12,7 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[status]}`}>{status.toLowerCase()}</span>;
+  return <span className={`rounded px-2 py-0.5 text-xs capitalize font-medium ${STATUS_CLASS[status]}`}>{status.toLowerCase()}</span>;
 }
 
 export function dateRange(l: LeaveRequest) {

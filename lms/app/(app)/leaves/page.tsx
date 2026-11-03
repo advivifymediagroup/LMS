@@ -68,7 +68,7 @@ export default async function LeaveHistoryPage({ searchParams }: PageProps<"/lea
           <input className="input" id="to" name="to" type="date" defaultValue={isDate(q.to) ? q.to : ""} />
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-primary">Filter</button>
+          <button className="btn btn-primary hover:cursor-pointer">Filter</button>
           <Link className="btn" href="/leaves">Reset</Link>
         </div>
       </form>

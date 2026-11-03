@@ -24,7 +24,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           {links.map(([href, label]) => (
             <Link key={href} href={href} className="text-gray-700 hover:text-blue-600">{label}</Link>
           ))}
-          <span className="ml-auto text-gray-500">{user.name} · {user.role.toLowerCase()}</span>
+          <span className="ml-auto text-gray-500 capitalize">{user.name} · {user.role.toLowerCase()}</span>
           <form action={logout}><button className="text-gray-700 hover:text-blue-600 hover:cursor-pointer">Log out</button></form>
         </nav>
       </header>
