@@ -17,7 +17,7 @@ export function UserForm({ user, departments, managers, action }: {
 }) {
   const [state, formAction, pending] = useActionState(action, null);
   return (
-    <form action={formAction} className="card max-w-xl space-y-4">
+    <form key={JSON.stringify(user)} action={formAction} className="card max-w-xl space-y-4">
       {state?.error && <p className="error">{state.error}</p>}
       {state?.ok && (
         <p className="success">

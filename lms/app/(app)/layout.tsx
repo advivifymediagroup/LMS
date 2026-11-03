@@ -25,7 +25,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <Link key={href} href={href} className="text-gray-700 hover:text-blue-600">{label}</Link>
           ))}
           <span className="ml-auto text-gray-500">{user.name} · {user.role.toLowerCase()}</span>
-          <form action={logout}><button className="text-gray-700 hover:text-blue-600">Log out</button></form>
+          <form action={logout}><button className="text-gray-700 hover:text-blue-600 hover:cursor-pointer">Log out</button></form>
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
