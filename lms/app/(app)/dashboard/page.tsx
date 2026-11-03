@@ -140,6 +140,7 @@ export default async function DashboardPage() {
         <h1 className="h1 mb-0 mr-auto">Hi, {user.name.split(" ")[0]}</h1>
         <Link className="btn btn-primary" href="/leaves/apply">Apply for leave</Link>
       </div>
+        <h1 className="h1 mb-2 mr-auto">Available Leaves</h1>
       {user.role === "ADMIN" && <AdminSection today={today} />}
       {user.role !== "EMPLOYEE" && <LeadSection user={user} today={today} />}
       <EmployeeSection user={user} today={today} />
