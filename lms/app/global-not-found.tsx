@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Geist } from "next/font/google";
 import "./globals.css";
 
@@ -29,10 +28,10 @@ export default function GlobalNotFound() {
               404
             </div>
             <h1 className="text-2xl font-semibold">
-              Oops! We couldn't find that page.
+              Oops! We couldn&apos;t find that page.
             </h1>
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-600">
-              The page you're looking for may have been removed.
+              The page you&apos;re looking for may have been removed.
             </p>
             <a className="btn btn-primary mt-6" href="/dashboard">
               Back to dashboard
