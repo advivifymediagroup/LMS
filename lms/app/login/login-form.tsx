@@ -20,7 +20,7 @@ export function LoginForm({ notice }: { notice?: string }) {
           <label className="label" htmlFor="password">Password</label>
           <input className="input" id="password" name="password" type="password" autoComplete="current-password" required />
         </div>
-        <button className="btn btn-primary w-full" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
+        <button className="btn btn-primary w-full hover:cursor-pointer" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
         <Link href="/forgot-password" className="block text-center text-sm text-blue-600">Forgot password?</Link>
       </form>
     </main>
