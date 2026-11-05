@@ -16,7 +16,7 @@ export default function ForgotPasswordPage() {
           <label className="label" htmlFor="identifier">Employee ID or email</label>
           <input className="input" id="identifier" name="identifier" autoComplete="username" required />
         </div>
-        <button className="btn btn-primary w-full" disabled={pending}>Send reset link</button>
+        <button className="btn btn-primary w-full hover:cursor-pointer" disabled={pending}>Send reset link</button>
         <Link href="/login" className="block text-center text-sm text-blue-600">Back to sign in</Link>
       </form>
     </main>

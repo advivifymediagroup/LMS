@@ -18,7 +18,7 @@ export default async function BalancesPage({ searchParams }: PageProps<"/admin/b
           <option value="" disabled>Choose an employee…</option>
           {users.map((u) => <option key={u.id} value={u.id}>{u.name} ({u.employeeId})</option>)}
         </select>
-        <button className="btn">Show</button>
+        <button className="btn hover:cursor-pointer">Show</button>
       </form>
       {userId && (
         <>

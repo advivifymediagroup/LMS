@@ -18,7 +18,7 @@ export function AdjustForm({ userId, types }: { userId: number; types: { id: num
         </select>
         <input className="input" name="days" type="number" step="0.5" placeholder="+/- days" required />
         <input className="input" name="note" placeholder="Reason (required)" required />
-        <button className="btn btn-primary" disabled={pending}>Apply</button>
+        <button className="btn btn-primary hover:cursor-pointer" disabled={pending}>Apply</button>
       </div>
     </form>
   );
