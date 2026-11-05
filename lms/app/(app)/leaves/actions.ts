@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth";
 import { checkLeave, fromIso, getBalances, todayIso, type LeaveCheck } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
 import { notifyApplied, notifyCancelled, notifyDecision } from "@/lib/notify";
+import { writeAudit } from "@/lib/audit";
 
 const half = z.enum(["FULL", "FIRST", "SECOND"]);
 const inputSchema = z.object({
@@ -81,6 +82,7 @@ export async function applyLeave(_: string | null, form: FormData): Promise<stri
         data: { userId: user.id, leaveTypeId: input.leaveTypeId, days: -check.days, kind: "LEAVE", leaveRequestId: created.id },
       });
     }
+    await writeAudit(tx, { actorId: user.id, targetUserId: user.id, action: autoApprove ? "AUTO_APPROVE" : "APPLY", entityType: "LEAVE_REQUEST", entityId: created.id, after: { status: created.status, startDate: created.startDate, endDate: created.endDate, days: created.days, leaveTypeId: created.leaveTypeId } });
     return created;
   });
   after(() => notifyApplied(leave.id));
@@ -104,6 +106,7 @@ export async function cancelLeave(id: number) {
         data: { userId: user.id, leaveTypeId: leave.leaveTypeId, days: leave.days, kind: "REFUND", leaveRequestId: id, note: "Cancelled" },
       });
     }
+    if (count) await writeAudit(tx, { actorId: user.id, targetUserId: user.id, action: "CANCEL", entityType: "LEAVE_REQUEST", entityId: id, before: { status: leave.status }, after: { status: "CANCELLED" } });
     return count > 0;
   });
   if (cancelled) after(() => notifyCancelled(id, leave.status === "APPROVED"));
@@ -143,6 +146,7 @@ export async function decideLeave(id: number, form: FormData) {
         data: { userId: leave!.userId, leaveTypeId: leave!.leaveTypeId, days: -Number(leave!.days), kind: "LEAVE", leaveRequestId: id },
       });
     }
+    if (count) await writeAudit(tx, { actorId: me.id, targetUserId: leave!.userId, action: decision === "APPROVE" ? "APPROVE" : "REJECT", entityType: "LEAVE_REQUEST", entityId: id, before: { status: leave!.status }, after: { status: decision === "APPROVE" ? "APPROVED" : "REJECTED", decisionReason: reason || null } });
     return count > 0;
   });
   if (decided) after(() => notifyDecision(id));

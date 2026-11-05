@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { fromIso, todayIso } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
 import { addHoliday, deleteHoliday } from "../policy-actions";
+import ConfirmDialog from "../../confirm-dialog";
 
 const weekday = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
 
@@ -39,13 +40,20 @@ export default async function HolidaysPage({ searchParams }: PageProps<"/admin/h
           <thead><tr><th>Date</th><th>Day</th><th>Occasion</th><th>Type</th><th></th></tr></thead>
           <tbody>
             {holidays.map((h) => (
-              <tr key={h.id}>
+              <tr key={h.id} className="hover:bg-gray-50">
                 <td>{toIso(h.date)}</td>
                 <td>{weekday(h.date)}</td>
                 <td>{h.name}</td>
                 <td>{h.isOptional ? "Optional" : "Fixed"}</td>
-                <td><form action={deleteHoliday.bind(null, h.id)}><button className="text-red-600">Delete</button></form></td>
-              </tr>
+                <td>
+                  <ConfirmDialog
+                    title="Delete Holiday?"
+                    description="Are you sure you want to delete this holiday?"
+                    confirmText="Delete Holiday"
+                    action={deleteHoliday.bind(null, h.id)}
+                  />
+                </td>
+                </tr>
             ))}
             {!holidays.length && <tr><td colSpan={5} className="text-gray-500">No holidays for {year} yet.</td></tr>}
           </tbody>

@@ -75,7 +75,7 @@ export function UserForm({ user, departments, managers, action }: {
           </label>
         )}
       </div>
-      <button className="btn btn-primary" disabled={pending}>{user ? "Save changes" : "Create user"}</button>
+      <button className="btn btn-primary hover:cursor-pointer" disabled={pending}>{user ? "Save changes" : "Create user"}</button>
     </form>
   );
 }

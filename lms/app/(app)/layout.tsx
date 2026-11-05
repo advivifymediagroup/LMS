@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     ["/documents", "Policies"],
     ["/profile", "Profile"],
     ...(user.role === "ADMIN"
-      ? ([["/admin/reports", "Reports"], ["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"], ["/admin/leave-types", "Leave types"], ["/admin/holidays", "Holidays"], ["/admin/settings", "Settings"]] as [string, string][])
+      ? ([["/admin/reports", "Reports"], ["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"], ["/admin/leave-types", "Leave types"], ["/admin/holidays", "Holidays"], ["/admin/settings", "Settings"], ["/admin/audit", "Audit log"]] as [string, string][])
       : []),
   ];
   return (

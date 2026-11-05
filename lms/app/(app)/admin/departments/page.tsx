@@ -15,7 +15,7 @@ export default async function DepartmentsPage({ searchParams }: PageProps<"/admi
       {typeof error === "string" && <p className="error">{error}</p>}
       <form action={createDepartment} className="card flex gap-2">
         <input className="input" name="name" placeholder="New department name" required />
-        <button className="btn btn-primary">Add</button>
+        <button className="btn btn-primary hover:cursor-pointer">Add</button>
       </form>
       <div className="card p-0">
         <table className="table">
@@ -26,14 +26,14 @@ export default async function DepartmentsPage({ searchParams }: PageProps<"/admi
                 <td>
                   <form action={renameDepartment.bind(null, d.id)} className="flex gap-2">
                     <input className="input" name="name" defaultValue={d.name} required />
-                    <button className="btn">Rename</button>
+                    <button className="btn hover:cursor-pointer">Rename</button>
                   </form>
                 </td>
                 <td>{d.users.map((u) => u.name).join(", ") || "—"}</td>
                 <td>{d._count.users}</td>
                 <td>
                   <form action={deleteDepartment.bind(null, d.id)}>
-                    <button className="btn" disabled={d._count.users > 0} title={d._count.users ? "Has users" : ""}>Delete</button>
+                    <button className="btn hover:cursor-pointer" disabled={d._count.users > 0} title={d._count.users ? "Has users" : ""}>Delete</button>
                   </form>
                 </td>
               </tr>

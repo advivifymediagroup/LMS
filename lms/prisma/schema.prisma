@@ -60,6 +60,28 @@ model User {
   ledgerEntries      LeaveLedger[]  @relation("LedgerCreator")
   documents          Document[]
   passwordResets     PasswordReset[]
+  auditActions       AuditLog[]     @relation("AuditActor")
+  auditSubjects      AuditLog[]     @relation("AuditTargetUser")
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  actorId      Int?
+  actor        User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  targetUserId Int?
+  targetUser   User?    @relation("AuditTargetUser", fields: [targetUserId], references: [id], onDelete: SetNull)
+  action       String
+  entityType   String
+  entityId     String?
+  before       Json?
+  after        Json?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([targetUserId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
 
 model Department {
