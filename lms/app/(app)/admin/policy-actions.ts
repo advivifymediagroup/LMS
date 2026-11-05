@@ -10,6 +10,7 @@ import { fromIso, getSetting, todayIso } from "@/lib/leave";
 import { runAllJobs, runDailyReminder } from "@/lib/jobs";
 import { sendMail, type SmtpSettings } from "@/lib/mail";
 import type { FormState } from "./actions";
+import { writeAudit } from "@/lib/audit";
 
 const halfDays = z.coerce.number().min(0).max(366).refine((d) => d * 2 === Math.round(d * 2), "Use multiples of 0.5");
 const wholeDays = z.coerce.number().int().min(0).max(366);
@@ -31,7 +32,7 @@ const typeSchema = z.object({
 });
 
 export async function saveLeaveType(id: number | null, _: FormState, form: FormData): Promise<FormState> {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const parsed = typeSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: `${parsed.error.issues[0].path.join(".")}: ${parsed.error.issues[0].message}` };
   const data = {
@@ -45,11 +46,20 @@ export async function saveLeaveType(id: number | null, _: FormState, form: FormD
     isActive: flag(form, "isActive"),
   };
   try {
-    if (id) await db.leaveType.update({ where: { id }, data });
+    if (id) {
+      const before = await db.leaveType.findUnique({ where: { id } });
+      await db.$transaction(async (tx) => {
+        await tx.leaveType.update({ where: { id }, data });
+        await writeAudit(tx, { actorId: actor.id, action: "UPDATE", entityType: "LEAVE_TYPE", entityId: id, before, after: data });
+      });
+    }
     else {
       const code = String(form.get("code") ?? "").trim().toUpperCase();
       if (!/^[A-Z]{2,10}$/.test(code)) return { error: "Code must be 2–10 letters, e.g. ML." };
-      await db.leaveType.create({ data: { ...data, code } });
+      await db.$transaction(async (tx) => {
+        const created = await tx.leaveType.create({ data: { ...data, code } });
+        await writeAudit(tx, { actorId: actor.id, action: "CREATE", entityType: "LEAVE_TYPE", entityId: created.id, after: { ...data, code } });
+      });
     }
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { error: "That code already exists." };
@@ -62,28 +72,37 @@ export async function saveLeaveType(id: number | null, _: FormState, form: FormD
 // ---------- Holidays ----------
 
 export async function addHoliday(form: FormData) {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const parsed = z
     .object({ date: z.iso.date("Pick a date"), name: z.string().trim().min(2, "Name is required").max(80) })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) redirect(`/admin/holidays?error=${encodeURIComponent(parsed.error.issues[0].message)}`);
   const { date, name } = parsed.data;
   const isOptional = flag(form, "isOptional");
-  await db.holiday.upsert({ where: { date: fromIso(date) }, update: { name, isOptional }, create: { date: fromIso(date), name, isOptional } });
+  await db.$transaction(async (tx) => {
+    const holidayDate = fromIso(date);
+    const before = await tx.holiday.findUnique({ where: { date: holidayDate } });
+    const holiday = await tx.holiday.upsert({ where: { date: holidayDate }, update: { name, isOptional }, create: { date: holidayDate, name, isOptional } });
+    await writeAudit(tx, { actorId: actor.id, action: before ? "UPDATE" : "CREATE", entityType: "HOLIDAY", entityId: holiday.id, before, after: { date, name, isOptional } });
+  });
   revalidatePath("/admin/holidays");
   redirect(`/admin/holidays?year=${date.slice(0, 4)}`);
 }
 
 export async function deleteHoliday(id: number) {
-  await requireUser(["ADMIN"]);
-  await db.holiday.delete({ where: { id } });
+  const actor = await requireUser(["ADMIN"]);
+  await db.$transaction(async (tx) => {
+    const before = await tx.holiday.findUnique({ where: { id } });
+    await tx.holiday.delete({ where: { id } });
+    await writeAudit(tx, { actorId: actor.id, action: "DELETE", entityType: "HOLIDAY", entityId: id, before });
+  });
   revalidatePath("/admin/holidays");
 }
 
 // ---------- System settings ----------
 
 export async function saveSettings(_: FormState, form: FormData): Promise<FormState> {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const workingDays = form.getAll("workingDays").map(Number).filter((d) => d >= 0 && d <= 6).sort();
   if (!workingDays.length) return { error: "Pick at least one working day." };
 
@@ -114,9 +133,11 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
   if (smtp.host && !smtp.from) return { error: "Set a From address for emails." };
 
   const values: Record<string, Prisma.InputJsonValue> = { workingDays, timezone, probationMonths, creditsFrom, notifyAlways, smtp };
-  await db.$transaction(
-    Object.entries(values).map(([key, value]) => db.setting.upsert({ where: { key }, update: { value }, create: { key, value } })),
-  );
+  await db.$transaction(async (tx) => {
+    const before = await tx.setting.findMany({ where: { key: { in: Object.keys(values) } } });
+    await Promise.all(Object.entries(values).map(([key, value]) => tx.setting.upsert({ where: { key }, update: { value }, create: { key, value } })));
+    await writeAudit(tx, { actorId: actor.id, action: "UPDATE", entityType: "SYSTEM_SETTINGS", after: values, before: Object.fromEntries(before.map((setting) => [setting.key, setting.value])) });
+  });
   revalidatePath("/", "layout");
   return { ok: "Settings saved." };
 }

@@ -13,7 +13,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     ["/documents", "Policies"],
     ["/profile", "Profile"],
     ...(user.role === "ADMIN"
-      ? ([["/admin/reports", "Reports"], ["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"], ["/admin/leave-types", "Leave types"], ["/admin/holidays", "Holidays"], ["/admin/settings", "Settings"]] as [string, string][])
+      ? ([["/admin/reports", "Reports"], ["/admin/users", "Users"], ["/admin/departments", "Departments"], ["/admin/balances", "Balances"], ["/admin/leave-types", "Leave types"], ["/admin/holidays", "Holidays"], ["/admin/settings", "Settings"], ["/admin/audit", "Audit log"]] as [string, string][])
       : []),
   ];
   return (
@@ -22,7 +22,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 text-sm">
           <span className="mr-2 font-semibold">LMS</span>
           {links.map(([href, label]) => (
-            <Link key={href} href={href} className="text-gray-700 hover:text-blue-600">{label}</Link>
+            <Link key={href} href={href} className="text-gray-700 hover:text-blue-600 capitalize">{label}</Link>
           ))}
           <span className="ml-auto text-gray-500 capitalize">{user.name} · {user.role.toLowerCase()}</span>
           <form action={logout}><button className="text-gray-700 hover:text-blue-600 hover:cursor-pointer">Log out</button></form>

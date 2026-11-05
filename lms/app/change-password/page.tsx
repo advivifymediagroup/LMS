@@ -23,7 +23,7 @@ export default function ChangePasswordPage() {
           <label className="label" htmlFor="confirm">Confirm new password</label>
           <input className="input" id="confirm" name="confirm" type="password" autoComplete="new-password" required />
         </div>
-        <button className="btn btn-primary w-full" disabled={pending}>Save password</button>
+        <button className="btn btn-primary w-full hover:cursor-pointer" disabled={pending}>Save password</button>
       </form>
     </main>
   );

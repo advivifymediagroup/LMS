@@ -38,7 +38,7 @@ export async function BalanceTable({ userId }: { userId: number }) {
                 <td className={Number(l.days) < 0 ? "text-red-700" : "text-green-700"}>
                   {Number(l.days) > 0 ? "+" : ""}{Number(l.days)}
                 </td>
-                <td>{l.kind.replace("_", " ").toLowerCase()}</td>
+                <td className="capitalize">{l.kind.replace("_", " ").toLowerCase()}</td>
                 <td>{l.note ?? (l.leaveRequestId ? `Leave #${l.leaveRequestId}` : "")}</td>
                 <td>{l.createdBy?.name ?? "System"}</td>
               </tr>

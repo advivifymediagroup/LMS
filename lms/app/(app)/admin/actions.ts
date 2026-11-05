@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { fromIso } from "@/lib/leave";
+import { writeAudit } from "@/lib/audit";
 
 export type FormState = { error?: string; ok?: string; tempPassword?: string } | null;
 
@@ -27,7 +28,7 @@ const userSchema = z.object({
 });
 
 export async function saveUser(id: number | null, _: FormState, form: FormData): Promise<FormState> {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const parsed = userSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { joiningDate, ...rest } = parsed.data;
@@ -36,12 +37,20 @@ export async function saveUser(id: number | null, _: FormState, form: FormData):
 
   try {
     if (id) {
-      await db.user.update({ where: { id }, data: { ...data, isActive: form.get("isActive") === "on", onNoticePeriod: form.get("onNoticePeriod") === "on" } });
+      const before = await db.user.findUnique({ where: { id } });
+      await db.$transaction(async (tx) => {
+        await tx.user.update({ where: { id }, data: { ...data, isActive: form.get("isActive") === "on", onNoticePeriod: form.get("onNoticePeriod") === "on" } });
+        await writeAudit(tx, { actorId: actor.id, targetUserId: id, action: "UPDATE", entityType: "USER", entityId: id, before, after: { ...data, isActive: form.get("isActive") === "on", onNoticePeriod: form.get("onNoticePeriod") === "on" } });
+      });
       revalidatePath("/admin/users");
       return { ok: "Saved." };
     }
     const pw = tempPassword();
-    await db.user.create({ data: { ...data, passwordHash: await bcrypt.hash(pw, 10), mustChangePassword: true } });
+    await db.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { ...data, passwordHash: await bcrypt.hash(pw, 10), mustChangePassword: true } });
+      await writeAudit(tx, { actorId: actor.id, targetUserId: user.id, action: "CREATE", entityType: "USER", entityId: user.id, after: data });
+      return user;
+    });
     revalidatePath("/admin/users");
     return { ok: `Created ${rest.employeeId}.`, tempPassword: pw };
   } catch (e) {
@@ -51,20 +60,26 @@ export async function saveUser(id: number | null, _: FormState, form: FormData):
 }
 
 export async function resetPassword(id: number, _: FormState): Promise<FormState> {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const pw = tempPassword();
-  await db.user.update({ where: { id }, data: { passwordHash: await bcrypt.hash(pw, 10), mustChangePassword: true } });
+  await db.$transaction(async (tx) => {
+    await tx.user.update({ where: { id }, data: { passwordHash: await bcrypt.hash(pw, 10), mustChangePassword: true } });
+    await writeAudit(tx, { actorId: actor.id, targetUserId: id, action: "RESET_PASSWORD", entityType: "USER", entityId: id, metadata: { passwordChanged: true } });
+  });
   return { ok: "Password reset. Share it privately; they must change it on next login.", tempPassword: pw };
 }
 
 // ---------- Departments ----------
 
 export async function createDepartment(form: FormData) {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const name = String(form.get("name") ?? "").trim();
   if (!name) redirect("/admin/departments?error=Name is required");
   try {
-    await db.department.create({ data: { name } });
+    await db.$transaction(async (tx) => {
+      const department = await tx.department.create({ data: { name } });
+      await writeAudit(tx, { actorId: actor.id, action: "CREATE", entityType: "DEPARTMENT", entityId: department.id, after: { name } });
+    });
   } catch (e) {
     if (isUnique(e)) redirect("/admin/departments?error=That department already exists");
     throw e;
@@ -73,11 +88,15 @@ export async function createDepartment(form: FormData) {
 }
 
 export async function renameDepartment(id: number, form: FormData) {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   const name = String(form.get("name") ?? "").trim();
   if (!name) redirect("/admin/departments?error=Name is required");
   try {
-    await db.department.update({ where: { id }, data: { name } });
+    await db.$transaction(async (tx) => {
+      const before = await tx.department.findUnique({ where: { id } });
+      await tx.department.update({ where: { id }, data: { name } });
+      await writeAudit(tx, { actorId: actor.id, action: "UPDATE", entityType: "DEPARTMENT", entityId: id, before, after: { name } });
+    });
   } catch (e) {
     if (isUnique(e)) redirect("/admin/departments?error=That department already exists");
     throw e;
@@ -86,10 +105,14 @@ export async function renameDepartment(id: number, form: FormData) {
 }
 
 export async function deleteDepartment(id: number) {
-  await requireUser(["ADMIN"]);
+  const actor = await requireUser(["ADMIN"]);
   if (await db.user.count({ where: { departmentId: id } }))
     redirect("/admin/departments?error=Move its users to another department first");
-  await db.department.delete({ where: { id } });
+  await db.$transaction(async (tx) => {
+    const before = await tx.department.findUnique({ where: { id } });
+    await tx.department.delete({ where: { id } });
+    await writeAudit(tx, { actorId: actor.id, action: "DELETE", entityType: "DEPARTMENT", entityId: id, before });
+  });
   revalidatePath("/admin/departments");
 }
 
@@ -192,7 +215,10 @@ export async function adjustBalance(_: FormState, form: FormData): Promise<FormS
     })
     .safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  await db.leaveLedger.create({ data: { ...parsed.data, kind: "MANUAL", createdById: admin.id } });
+  await db.$transaction(async (tx) => {
+    const entry = await tx.leaveLedger.create({ data: { ...parsed.data, kind: "MANUAL", createdById: admin.id } });
+    await writeAudit(tx, { actorId: admin.id, targetUserId: parsed.data.userId, action: "ADJUST", entityType: "LEAVE_BALANCE", entityId: entry.id, after: parsed.data });
+  });
   revalidatePath("/admin/balances");
   return { ok: "Adjustment saved." };
 }

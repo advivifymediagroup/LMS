@@ -38,7 +38,7 @@ export default async function LeaveDetailPage({ params, searchParams }: PageProp
   return (
     <div className="max-w-2xl space-y-4">
       <Link href={mine ? "/leaves" : "/approvals"} className="text-sm text-blue-600">← Back</Link>
-      <h1 className="h1">Leave request #{leave.id}</h1>
+      <h1 className="h1 mt-2">Leave request #{leave.id}</h1>
       {typeof error === "string" && <p className="error">{error}</p>}
       <dl className="card grid grid-cols-[140px_1fr] gap-x-4 gap-y-2 text-sm">
         {rows.map(([k, v]) => (
