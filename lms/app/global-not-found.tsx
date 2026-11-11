@@ -5,7 +5,7 @@ import "./globals.css";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Page not found | Leave Management",
+  title: { absolute: "Page not found | Leave Management" },
   description: "The requested page could not be found.",
 };
 

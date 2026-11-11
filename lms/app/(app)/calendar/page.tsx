@@ -103,3 +103,4 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
     </div>
   );
 }
+export const metadata = { title: "Calendar" };

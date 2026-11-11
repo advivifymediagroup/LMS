@@ -29,3 +29,4 @@ export default async function BalancesPage({ searchParams }: PageProps<"/admin/b
     </div>
   );
 }
+export const metadata = { title: "Balances" };

@@ -62,3 +62,4 @@ export default async function HolidaysPage({ searchParams }: PageProps<"/admin/h
     </div>
   );
 }
+export const metadata = { title: "Holidays" };

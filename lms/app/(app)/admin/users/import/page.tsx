@@ -5,3 +5,4 @@ export default async function ImportPage() {
   await requireUser(["ADMIN"]);
   return <ImportForm />;
 }
+export const metadata = { title: "Import users" };

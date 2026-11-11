@@ -45,3 +45,4 @@ export default async function DepartmentsPage({ searchParams }: PageProps<"/admi
     </div>
   );
 }
+export const metadata = { title: "Departments" };

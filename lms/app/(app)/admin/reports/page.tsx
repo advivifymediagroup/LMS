@@ -69,3 +69,4 @@ export default async function ReportsPage({ searchParams }: PageProps<"/admin/re
     </div>
   );
 }
+export const metadata = { title: "Leave report" };

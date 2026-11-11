@@ -17,3 +17,4 @@ export default async function ResetPasswordPage({ searchParams }: PageProps<"/re
     </main>
   );
 }
+export const metadata = { title: "Reset password" };

@@ -77,3 +77,4 @@ export default async function LeaveHistoryPage({ searchParams }: PageProps<"/lea
     </div>
   );
 }
+export const metadata = { title: "Leave history" };

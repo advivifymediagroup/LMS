@@ -81,3 +81,4 @@ export default async function LeaveTypesPage() {
     </div>
   );
 }
+export const metadata = { title: "Leave types" };
