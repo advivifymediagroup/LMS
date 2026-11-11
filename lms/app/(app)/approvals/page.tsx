@@ -58,3 +58,4 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
     </div>
   );
 }
+export const metadata = { title: "Approvals" };

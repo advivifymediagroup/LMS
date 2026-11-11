@@ -5,7 +5,10 @@ import "./globals.css";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Leave Management",
+  title: {
+    default: "Leave Management",
+    template: "%s | Leave Management",
+  },
   description: "Internal leave management tool",
 };
 

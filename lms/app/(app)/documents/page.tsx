@@ -64,3 +64,4 @@ export default async function DocumentsPage() {
     </div>
   );
 }
+export const metadata = { title: "Policies" };

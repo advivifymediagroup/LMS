@@ -39,3 +39,4 @@ export default async function UsersPage() {
     </div>
   );
 }
+export const metadata = { title: "Users" };

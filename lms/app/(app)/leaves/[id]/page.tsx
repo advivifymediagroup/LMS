@@ -55,3 +55,4 @@ export default async function LeaveDetailPage({ params, searchParams }: PageProp
     </div>
   );
 }
+export const metadata = { title: "Leave request" };

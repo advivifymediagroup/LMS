@@ -16,3 +16,4 @@ export default async function NewUserPage() {
     </div>
   );
 }
+export const metadata = { title: "New user" };

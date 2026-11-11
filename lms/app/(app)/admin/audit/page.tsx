@@ -60,3 +60,4 @@ export default async function AuditPage() {
     </div>
   );
 }
+export const metadata = { title: "Audit log" };

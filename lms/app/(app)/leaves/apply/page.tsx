@@ -18,3 +18,4 @@ export default async function ApplyPage() {
     </div>
   );
 }
+export const metadata = { title: "Apply for leave" };

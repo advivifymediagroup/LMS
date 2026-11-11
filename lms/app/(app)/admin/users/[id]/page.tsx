@@ -29,3 +29,4 @@ export default async function EditUserPage({ params }: PageProps<"/admin/users/[
     </div>
   );
 }
+export const metadata = { title: "Edit user" };
