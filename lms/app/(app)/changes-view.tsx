@@ -57,7 +57,7 @@ export default function ChangesView({
 
       {metadata && (
         <details className="text-xs">
-          <summary className="cursor-pointer text-blue-600">
+          <summary className="cursor-pointer text-brand-600">
             Metadata
           </summary>
           <pre className="whitespace-pre-wrap">

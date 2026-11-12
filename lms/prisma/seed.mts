@@ -81,8 +81,13 @@ async function main() {
     }
   }
 
-  const eng = await db.department.upsert({ where: { name: "Engineering" }, update: {}, create: { name: "Engineering" } });
-  const sales = await db.department.upsert({ where: { name: "Sales" }, update: {}, create: { name: "Sales" } });
+  // The six Advivify teams. Older dev databases called Development "Engineering".
+  await db.department.updateMany({ where: { name: "Engineering" }, data: { name: "Development" } });
+  const team: Record<string, { id: number }> = {};
+  for (const name of ["Development", "Sales", "Marketing", "Media Buying", "Design", "Finance"]) {
+    team[name] = await db.department.upsert({ where: { name }, update: {}, create: { name } });
+  }
+  const eng = team.Development, sales = team.Sales;
 
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
   const user = (employeeId: string, name: string, role: Role, departmentId: number | null, managerId: number | null, joined: string) =>
@@ -98,7 +103,7 @@ async function main() {
     });
 
   const admin = await user("ADM001", "Asha Admin", "ADMIN", null, null, "2023-01-02");
-  const engLead = await user("LEAD001", "Ravi Engineering Lead", "LEAD", eng.id, admin.id, "2023-06-01");
+  const engLead = await user("LEAD001", "Ravi Development Lead", "LEAD", eng.id, admin.id, "2023-06-01");
   const salesLead = await user("LEAD002", "Meera Sales Lead", "LEAD", sales.id, admin.id, "2023-08-01");
   const staff = [
     await user("EMP001", "Karan Dev", "EMPLOYEE", eng.id, engLead.id, "2024-02-01"),
@@ -120,6 +125,37 @@ async function main() {
       });
     }
   }
+  // Sample tasks, only on a fresh database. Due dates are relative to today.
+  if ((await db.task.count()) === 0) {
+    const day = (n: number) => { const x = new Date(); x.setUTCHours(0, 0, 0, 0); x.setUTCDate(x.getUTCDate() + n); return x; };
+    const [karan, neha, arjun, pooja, vikram] = staff;
+    const tasks: [string, string, { id: number }, { id: number } | null, number | null, "LOW" | "MED" | "HIGH", "TODO" | "DOING" | "REVIEW" | "DONE"][] = [
+      ["Migrate auth service to SSO", "Project task", eng, engLead, 2, "HIGH", "DOING"],
+      ["Fix checkout timeout on mobile", "Project task", eng, karan, 0, "HIGH", "TODO"],
+      ["API docs for partner portal", "Project task", eng, neha, 6, "MED", "REVIEW"],
+      ["Approve 3 pull requests", "Review", eng, karan, 1, "MED", "TODO"],
+      ["Sprint planning notes", "Meeting", eng, arjun, -1, "LOW", "TODO"],
+      ["Release retrospective", "Meeting", eng, karan, -3, "LOW", "DONE"],
+      ["Q4 pipeline review deck", "Project task", sales, salesLead, 3, "HIGH", "DOING"],
+      ["Follow up: Delta Retail renewal", "Task", sales, pooja, 1, "MED", "TODO"],
+      ["CRM data cleanup", "Admin", sales, pooja, -4, "LOW", "DONE"],
+      ["Black Friday email sequence", "Project task", team.Marketing, null, 4, "HIGH", "REVIEW"],
+      ["Meta Ads budget reallocation", "Task", team["Media Buying"], null, 1, "HIGH", "DOING"],
+      ["Portal dashboard UI v2", "Project task", team.Design, null, 5, "MED", "DOING"],
+      ["November payroll run", "Task", team.Finance, null, 13, "HIGH", "TODO"],
+      // Onboarding checklist for the new hire on probation.
+      ["Sign your contract and policies", "Onboarding", sales, vikram, -40, "HIGH", "DONE"],
+      ["Set up laptop and email", "Onboarding", sales, vikram, -40, "HIGH", "DONE"],
+      ["Read the leave & attendance policy", "Onboarding", sales, vikram, 2, "MED", "TODO"],
+      ["Shadow a client call", "Onboarding", sales, vikram, 7, "MED", "TODO"],
+    ];
+    for (const [title, kind, dept, who, due, priority, status] of tasks) {
+      await db.task.create({
+        data: { title, kind, departmentId: dept.id, assigneeId: who?.id ?? null, dueDate: due === null ? null : day(due), priority, status, createdById: admin.id, completedAt: status === "DONE" ? day(due ?? 0) : null },
+      });
+    }
+  }
+
   console.log("Seeded. Log in as ADM001 / LEAD001 / EMP001 with the dev password from the README.");
 }
 

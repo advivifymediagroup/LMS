@@ -5,14 +5,14 @@ import { toIso } from "@/lib/leave-days";
 type Row = LeaveRequest & { leaveType: LeaveType; user?: User };
 
 const STATUS_CLASS: Record<string, string> = {
-  PENDING: "bg-amber-100 text-amber-800",
-  APPROVED: "bg-green-100 text-green-800",
-  REJECTED: "bg-red-100 text-red-800",
-  CANCELLED: "bg-gray-100 text-gray-600",
+  PENDING: "bg-brand-50 text-brand-700",
+  APPROVED: "bg-gray-100 text-char",
+  REJECTED: "text-gray-500",
+  CANCELLED: "text-gray-500",
 };
 
 export function StatusBadge({ status }: { status: string }) {
-  return <span className={`rounded px-2 py-0.5 text-xs capitalize font-medium ${STATUS_CLASS[status]}`}>{status.toLowerCase()}</span>;
+  return <span className={`pill capitalize ${STATUS_CLASS[status]}`}>{status.toLowerCase()}</span>;
 }
 
 export function dateRange(l: LeaveRequest) {
@@ -38,7 +38,7 @@ export function LeaveTable({ rows, showUser = false }: { rows: Row[]; showUser?:
               <td>{Number(l.days)}</td>
               <td><StatusBadge status={l.status} /></td>
               <td>{toIso(l.createdAt)}</td>
-              <td><Link className="text-blue-600" href={`/leaves/${l.id}`}>View</Link></td>
+              <td><Link className="text-brand-600" href={`/leaves/${l.id}`}>View</Link></td>
             </tr>
           ))}
         </tbody>

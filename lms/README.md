@@ -11,13 +11,26 @@ npm install
 cp .env.example .env        # then set SESSION_SECRET (command is in the file)
 npm run db:up               # Postgres on localhost:5433, Mailpit on localhost:8025
 npm run db:migrate          # apply schema
-npm run db:seed             # sample users, leave types, holidays
+npm run db:seed             # sample users, teams, tasks, leave types, holidays
 npm run dev                 # http://localhost:3000
 npm test                    # unit tests (day count, CSV)
 ```
 
 Seed logins (dev only): `ADM001`, `LEAD001`, `LEAD002`, `EMP001`–`EMP005`, or their `@example.com` emails.
 Password for all: `Welcome@123`. `EMP005` joined 2026-09-15, so they're on probation (paid leave blocked).
+
+## Advivify Portal
+
+The app is styled to the "Advivify Portal" design (Manrope + IBM Plex Mono, warm neutrals, orange accent; tokens in `app/globals.css`).
+
+- Dark sidebar with Workspace, Admin and Teams sections; header shows the role and section
+- Dashboard per role: greeting, stats, due-soon tasks, leave balance or approvals (approve / decline with reason), teams overview for leads and admins, team activity for employees, onboarding checklist for new hires (their tasks of kind "Onboarding")
+- Leave page (`/leave`): approvals, balance cards, request form, who's out for the next 10 working days, recent requests
+- Tasks: team board (`/tasks/board`), My tasks (`/tasks`), create / edit / delete. Tasks are deliberately generic (team, assignee, status, priority, due date, free "kind" label) until each team's workflow is decided. Permissions: `lib/task-rules.ts` (tested)
+- Analytics (`/analytics`, leads and admins): tasks completed and on-time rate, leave days by team this month
+- Users & roles: search, role filter, CSV export
+
+Not in this pass: courses, global search, notifications, single sign-on, two-level (HR) leave approval.
 
 ## What's built (Phases 0–3)
 

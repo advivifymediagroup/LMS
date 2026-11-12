@@ -11,7 +11,7 @@ export function ImportForm() {
   const [state, action, pending] = useActionState(importUsers, null);
   return (
     <div className="space-y-4">
-      <Link href="/admin/users" className="text-sm text-blue-600">← Users</Link>
+      <Link href="/admin/users" className="text-sm text-brand-600">← Users</Link>
       <h1 className="h1">Import users (CSV)</h1>
       <div className="card space-y-2 text-sm">
         <p>Columns (header row required). Role is ADMIN, LEAD or EMPLOYEE. Dates are YYYY-MM-DD. Balance columns are optional and set the opening balance.</p>

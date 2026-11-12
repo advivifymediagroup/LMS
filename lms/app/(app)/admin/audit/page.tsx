@@ -51,7 +51,7 @@ export default async function AuditPage() {
                     after={log.after as Record<string, any> | null}
                     metadata={log.metadata as Record<string, any> | null}
                   />
-                </td>{" "}
+                </td>
               </tr>
             ))}
           </tbody>

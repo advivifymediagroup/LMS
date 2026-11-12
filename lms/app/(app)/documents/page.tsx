@@ -33,7 +33,7 @@ export default async function DocumentsPage() {
             </div>
             {isAdmin && (
               <details className="text-sm">
-                <summary className="cursor-pointer text-blue-600">Replace or delete</summary>
+                <summary className="cursor-pointer text-brand-600">Replace or delete</summary>
                 <div className="mt-3 flex flex-wrap items-end gap-4">
                   <ActionForm action={saveDocument.bind(null, d.id)} submit="Replace" className="flex flex-wrap items-end gap-2">
                     <input className="input w-56" name="title" defaultValue={d.title} aria-label="Title" required maxLength={200} />

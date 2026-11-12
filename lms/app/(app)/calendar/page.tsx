@@ -83,12 +83,12 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
             const bg = h ? (h.isOptional ? "bg-amber-50" : "bg-red-50") : off ? "bg-gray-50" : "";
             return (
               <div key={d} className={`min-h-24 border-b border-r border-gray-200 p-1 ${bg} ${d.slice(0, 7) !== month ? "opacity-40" : ""}`}>
-                <div className={`mb-1 ${d === today ? "font-bold text-blue-600" : "text-gray-500"}`}>{Number(d.slice(8))}</div>
+                <div className={`mb-1 ${d === today ? "font-bold text-brand-600" : "text-gray-500"}`}>{Number(d.slice(8))}</div>
                 {h && <div className="mb-1 text-gray-700">{h.name}</div>}
                 {d.slice(0, 7) === month && leavesOn.get(d)?.map((l) => {
                   const props = {
                     title: `${l.user.name}: ${l.leaveType.name} (${l.status.toLowerCase()})`,
-                    className: `mb-0.5 block truncate rounded border px-1 ${l.status === "PENDING" ? "border-dashed border-gray-400" : "border-blue-200 bg-blue-50"}`,
+                    className: `mb-0.5 block truncate rounded border px-1 ${l.status === "PENDING" ? "border-dashed border-gray-400" : "border-brand-200 bg-brand-50"}`,
                     children: `${l.user.name} · ${l.leaveType.code}${half(l, d)}`,
                   };
                   // Same rule as the detail page: applicant, their manager, admins.

@@ -34,7 +34,7 @@ export default async function LeaveHistoryPage({ searchParams }: PageProps<"/lea
     <div className="space-y-4">
       <div className="flex items-center">
         <h1 className="h1 mb-0 mr-auto">Leave history</h1>
-        <Link className="btn btn-primary" href="/leaves/apply">Apply for leave</Link>
+        <Link className="btn btn-accent" href="/leave#apply">Request leave</Link>
       </div>
       <form className="card grid gap-3 sm:grid-cols-6 sm:items-end">
         {scopes.length > 1 && (

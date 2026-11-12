@@ -1,20 +1,19 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { fontVars } from "./fonts";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: {
-    default: "Leave Management",
-    template: "%s | Leave Management",
+    default: "Advivify Portal",
+    template: "%s | Advivify Portal",
   },
-  description: "Internal leave management tool",
+  description: "Advivify company portal: leave and team tasks",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${geistSans.variable} h-full antialiased`}>
+    <html lang="en" className={`${fontVars} h-full antialiased`}>
       <body className="min-h-full font-sans">{children}</body>
     </html>
   );

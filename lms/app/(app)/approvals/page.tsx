@@ -39,7 +39,7 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
                 <span>{dateRange(l)}</span>
                 <span className="font-medium">{Number(l.days)} day(s)</span>
                 {bal?.type.needsBalance && <span className="text-sm text-gray-500">{bal.available} available before this</span>}
-                <Link className="ml-auto text-sm text-blue-600" href={`/leaves/${l.id}`}>Details</Link>
+                <Link className="ml-auto text-sm text-brand-600" href={`/leaves/${l.id}`}>Details</Link>
               </div>
               <p className="text-sm text-gray-700">{l.reason}</p>
               <form action={decideLeave.bind(null, l.id)} className="flex flex-wrap gap-2">

@@ -11,7 +11,7 @@ export default async function ResetPasswordPage({ searchParams }: PageProps<"/re
       ) : (
         <div className="card max-w-sm space-y-3">
           <p className="error">This reset link is incomplete.</p>
-          <Link href="/forgot-password" className="text-sm text-blue-600">Ask for a new link</Link>
+          <Link href="/forgot-password" className="text-sm text-brand-600">Ask for a new link</Link>
         </div>
       )}
     </main>

@@ -16,7 +16,7 @@ export default async function EditUserPage({ params }: PageProps<"/admin/users/[
   const { departments, managers } = await userFormOptions();
   return (
     <div className="space-y-4">
-      <Link href="/admin/users" className="text-sm text-blue-600">← Users</Link>
+      <Link href="/admin/users" className="text-sm text-brand-600">← Users</Link>
       <h1 className="h1">{user.name} <span className="text-base font-normal text-gray-500">{user.employeeId}</span></h1>
       <UserForm
         user={{ ...user, joiningDate: toIso(user.joiningDate) }}

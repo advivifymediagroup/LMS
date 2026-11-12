@@ -1,51 +1,113 @@
 @import "tailwindcss";
 
+/* Advivify portal theme: warm neutrals, charcoal, orange accent (from the Advivify Portal design). */
 @theme inline {
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-manrope);
+  --font-mono: var(--font-plex-mono);
+}
+
+@theme {
+  /* Warm grays replace Tailwind's cool grays everywhere gray-* is used. */
+  --color-gray-50: #faf8f5;
+  --color-gray-100: #efece7;
+  --color-gray-200: #ece8e2;
+  --color-gray-300: #e3dfd8;
+  --color-gray-400: #b9b4ac;
+  --color-gray-500: #8a8d92;
+  --color-gray-600: #6b6e73;
+  --color-gray-700: #4a4d52;
+  --color-gray-800: #2f3237;
+  --color-gray-900: #1f2124;
+
+  --color-paper: #f7f5f2;
+  --color-ink: #1f2124;
+  --color-char: #2f3237;
+
+  --color-brand-50: #ffeee3;
+  --color-brand-200: #ffd3b8;
+  --color-brand-300: #ffb283;
+  --color-brand-400: #ff8a47;
+  --color-brand-500: #ff6b1a;
+  --color-brand-600: #d9560d;
+  --color-brand-700: #c2470a;
+  --color-brand-900: #7a2e06;
 }
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-paper text-ink;
 }
 
 @layer components {
   .input {
-    @apply w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500;
+    @apply h-[42px] w-full rounded-[10px] border border-gray-300 bg-white px-3 text-sm outline-none focus:border-char;
+  }
+  textarea.input {
+    @apply h-auto py-2.5;
   }
   .label {
-    @apply mb-1 block text-sm font-medium text-gray-700;
+    @apply mb-1.5 block text-[13px] font-semibold text-char;
   }
   .btn {
-    @apply inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-100 disabled:opacity-50;
+    @apply inline-flex h-[42px] cursor-pointer items-center justify-center gap-2 rounded-[10px] border border-[#d9d4cc] bg-white px-[18px] text-sm font-bold text-char hover:border-char disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-sm {
+    @apply h-8 px-3 text-[12.5px];
   }
   .btn-primary {
-    @apply border-blue-600 bg-blue-600 text-white hover:bg-blue-700;
+    @apply border-char bg-char text-white hover:border-ink hover:bg-ink;
+  }
+  .btn-accent {
+    @apply border-brand-500 bg-brand-500 font-extrabold text-ink hover:border-[#f25e0e] hover:bg-[#f25e0e];
   }
   .btn-danger {
-    @apply border-red-600 bg-red-600 text-white hover:bg-red-700;
+    @apply border-red-700 bg-red-700 text-white hover:bg-red-800;
   }
   .card {
-    @apply rounded-lg border border-gray-200 bg-white p-5;
+    @apply rounded-[14px] border border-gray-200 bg-white p-5;
+  }
+  .card-title {
+    @apply text-base font-extrabold;
   }
   .table {
     @apply w-full text-left text-sm;
   }
   .table th {
-    @apply border-b border-gray-200 px-3 py-2 font-medium text-gray-600;
+    @apply border-b border-gray-200 bg-gray-50 px-4 py-2.5 font-mono text-[11px] font-medium tracking-[.06em] text-gray-500 uppercase;
   }
   .table td {
-    @apply border-b border-gray-100 px-3 py-2 align-top;
+    @apply border-b border-[#f0ece6] px-4 py-3 align-middle;
   }
   .error {
-    @apply rounded-md bg-red-50 px-3 py-2 text-sm text-red-700;
+    @apply rounded-[10px] bg-red-50 px-3.5 py-2.5 text-sm text-red-800;
   }
   .notice {
-    @apply rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800;
+    @apply rounded-[10px] bg-brand-50 px-3.5 py-2.5 text-sm text-brand-900;
   }
   .success {
-    @apply rounded-md bg-green-50 px-3 py-2 text-sm text-green-800;
+    @apply rounded-[10px] border border-gray-300 bg-white px-3.5 py-2.5 text-sm font-semibold text-char;
   }
   .h1 {
-    @apply mb-4 text-2xl font-semibold;
+    @apply mb-4 text-[26px] font-extrabold tracking-[-0.02em];
+  }
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium tracking-[.08em] text-gray-500 uppercase;
+  }
+  .num {
+    @apply font-mono font-semibold tracking-[-0.03em];
+  }
+  .link {
+    @apply font-bold text-brand-600 hover:text-char;
+  }
+  .avatar {
+    @apply grid size-8 flex-none place-items-center rounded-full bg-char text-[11px] font-bold text-white;
+  }
+  .pill {
+    @apply inline-block rounded-full px-2.5 py-1 text-xs font-bold whitespace-nowrap;
+  }
+  .bar {
+    @apply h-1.5 overflow-hidden rounded-full bg-gray-100;
+  }
+  .bar > div {
+    @apply h-full rounded-full bg-char;
   }
 }

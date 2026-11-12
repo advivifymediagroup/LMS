@@ -118,7 +118,10 @@ export async function decideLeave(id: number, form: FormData) {
   const me = await requireUser(["LEAD", "ADMIN"]);
   const decision = form.get("decision");
   const reason = String(form.get("reason") ?? "").trim();
-  const back = (msg: string) => redirect(`/approvals?error=${encodeURIComponent(msg)}`);
+  // Decisions can be made from the dashboard, the leave page or /approvals; go back to where it was clicked.
+  const from = String(form.get("back") ?? "");
+  const page = ["/dashboard", "/leave", "/approvals"].includes(from) ? from : "/approvals";
+  const back = (msg: string) => redirect(`${page}?error=${encodeURIComponent(msg)}`);
 
   const leave = await db.leaveRequest.findUnique({ where: { id }, include: { user: true, leaveType: true } });
   if (!leave || leave.status !== "PENDING") back("That request is no longer pending.");
@@ -151,5 +154,5 @@ export async function decideLeave(id: number, form: FormData) {
   });
   if (decided) after(() => notifyDecision(id));
   revalidatePath("/", "layout");
-  redirect("/approvals");
+  redirect(page);
 }

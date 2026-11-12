@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import { Geist } from "next/font/google";
+import { fontVars } from "./fonts";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: { absolute: "Page not found | Leave Management" },
@@ -11,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function GlobalNotFound() {
   return (
-    <html lang="en" className={`${geistSans.variable} h-full`}>
+    <html lang="en" className={`${fontVars} h-full`}>
       <body className="min-h-full bg-gray-50 font-sans text-gray-900">
         <header className="border-b border-gray-200 bg-white">
           <nav className="mx-auto flex max-w-6xl items-center px-4 py-3 text-sm">
@@ -22,7 +21,7 @@ export default function GlobalNotFound() {
         <main className="mx-auto flex max-w-6xl justify-center px-4 py-16 sm:py-24">
           <section className="card w-full max-w-xl py-10 text-center sm:px-10">
             <div
-              className="mx-auto mb-5 flex size-16 items-center justify-center rounded-full bg-blue-50 text-2xl font-semibold text-blue-600"
+              className="mx-auto mb-5 flex size-16 items-center justify-center rounded-full bg-brand-50 text-2xl font-semibold text-brand-600"
               aria-hidden="true"
             >
               404
