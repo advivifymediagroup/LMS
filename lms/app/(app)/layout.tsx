@@ -6,6 +6,7 @@ import { probationEnd, todayIso } from "@/lib/leave";
 import { logout } from "../login/actions";
 import { Avatar } from "./ui";
 import { PageTitle, SideNav, TeamNav, type NavItem } from "./nav";
+import { Logo } from "../logo";
 
 const ROLE_LABEL = { ADMIN: "Admin", LEAD: "Team lead", EMPLOYEE: "Employee" } as const;
 
@@ -48,9 +49,8 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen flex-col bg-paper md:flex-row">
       <aside className="flex w-full flex-none flex-col gap-5 bg-char px-3.5 py-4 text-paper md:sticky md:top-0 md:h-screen md:w-[248px] md:gap-7 md:overflow-y-auto md:py-[22px]">
-        <Link href="/dashboard" className="flex items-center gap-2.5 px-2">
-          <span className="grid size-[30px] place-items-center rounded-lg bg-brand-500 text-base font-extrabold text-char">A</span>
-          <span className="text-[17px] font-extrabold tracking-[-0.02em]">Advivify</span>
+        <Link href="/dashboard" className="px-2">
+          <Logo size={30} dark />
         </Link>
         <nav className="flex gap-0.5 overflow-x-auto md:flex-col md:overflow-visible">
           <div className={heading}>Workspace</div>
