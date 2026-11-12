@@ -11,7 +11,7 @@ export async function getSession() {
     password: process.env.SESSION_SECRET!,
     cookieName: "lms_session",
     ttl: 60 * 60 * 12,
-    cookieOptions: { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production" },
+    cookieOptions: { httpOnly: true, sameSite: "lax", secure: (process.env.APP_URL ?? "").startsWith("https:") },
   });
 }
 
