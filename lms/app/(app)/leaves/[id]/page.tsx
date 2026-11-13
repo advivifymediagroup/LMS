@@ -6,6 +6,7 @@ import { todayIso } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
 import { cancelLeave } from "../actions";
 import { StatusBadge, dateRange } from "../leave-table";
+import { SubmitButton } from "../../../submit-button";
 
 export default async function LeaveDetailPage({ params, searchParams }: PageProps<"/leaves/[id]">) {
   const user = await requireUser();
@@ -47,9 +48,9 @@ export default async function LeaveDetailPage({ params, searchParams }: PageProp
       </dl>
       {canCancel && (
         <form action={cancelLeave.bind(null, leave.id)}>
-          <button className="btn btn-danger hover:cursor-pointer">
+          <SubmitButton className="btn btn-danger hover:cursor-pointer" pendingText="Cancelling…">
             Cancel this leave{leave.status === "APPROVED" && leave.leaveType.needsBalance ? " (days go back to your balance)" : ""}
-          </button>
+          </SubmitButton>
         </form>
       )}
     </div>

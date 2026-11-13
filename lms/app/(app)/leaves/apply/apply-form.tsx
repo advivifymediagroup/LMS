@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import { LoadingSpinner } from "../../../loading-ui";
+import { SubmitButton } from "../../../submit-button";
 import { applyLeave, previewLeave, type Preview } from "../actions";
 
 type TypeOption = { id: number; name: string; allowHalfDay: boolean; hint: string };
@@ -12,25 +14,37 @@ export function ApplyForm({ types, today }: { types: TypeOption[]; today: string
   const [start, setStart] = useState(today);
   const [end, setEnd] = useState(today);
   const [preview, setPreview] = useState<Preview>(null);
-  const [tick, setTick] = useState(0); // bumps on any field change to refresh the preview
+  const [previewPending, setPreviewPending] = useState(false);
+  const [tick, setTick] = useState(0); // refreshes the preview when a half-day option changes
   const seq = useRef(0);
 
   const type = types.find((t) => String(t.id) === typeId);
   const single = !end || start === end;
 
   useEffect(() => {
-    if (!formRef.current || !typeId || !start) return;
     const n = ++seq.current;
+    if (!formRef.current || !typeId || !start) {
+      setPreview(null);
+      setPreviewPending(false);
+      return;
+    }
+
     const data = new FormData(formRef.current);
+    setPreview(null);
+    setPreviewPending(true);
     const timer = setTimeout(async () => {
-      const res = await previewLeave(data);
-      if (n === seq.current) setPreview(res); // ignore stale responses
+      try {
+        const res = await previewLeave(data);
+        if (n === seq.current) setPreview(res); // ignore stale responses
+      } finally {
+        if (n === seq.current) setPreviewPending(false);
+      }
     }, 250);
     return () => clearTimeout(timer);
   }, [typeId, start, end, tick]);
 
   return (
-    <form ref={formRef} action={action} onChange={() => setTick((t) => t + 1)} className="card space-y-4">
+    <form ref={formRef} action={action} className="card space-y-4">
       {error && <p className="error">{error}</p>}
 
       <div>
@@ -56,7 +70,7 @@ export function ApplyForm({ types, today }: { types: TypeOption[]; today: string
       {type?.allowHalfDay !== false && (single ? (
         <div>
           <label className="label" htmlFor="startHalf">Duration</label>
-          <select className="input" id="startHalf" name="startHalf" defaultValue="FULL">
+          <select className="input" id="startHalf" name="startHalf" defaultValue="FULL" onChange={() => setTick((t) => t + 1)}>
             <option value="FULL">Full day</option>
             <option value="FIRST">First half</option>
             <option value="SECOND">Second half</option>
@@ -66,14 +80,14 @@ export function ApplyForm({ types, today }: { types: TypeOption[]; today: string
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="label" htmlFor="startHalf">First day</label>
-            <select className="input" id="startHalf" name="startHalf" defaultValue="FULL">
+            <select className="input" id="startHalf" name="startHalf" defaultValue="FULL" onChange={() => setTick((t) => t + 1)}>
               <option value="FULL">Full day</option>
               <option value="SECOND">From second half</option>
             </select>
           </div>
           <div>
             <label className="label" htmlFor="endHalf">Last day</label>
-            <select className="input" id="endHalf" name="endHalf" defaultValue="FULL">
+            <select className="input" id="endHalf" name="endHalf" defaultValue="FULL" onChange={() => setTick((t) => t + 1)}>
               <option value="FULL">Full day</option>
               <option value="FIRST">Until first half</option>
             </select>
@@ -81,7 +95,13 @@ export function ApplyForm({ types, today }: { types: TypeOption[]; today: string
         </div>
       ))}
 
-      {preview && (preview.ok
+      {previewPending && (
+        <p role="status" aria-live="polite" className="notice flex items-center gap-2">
+          <LoadingSpinner />
+          Checking leave dates…
+        </p>
+      )}
+      {!previewPending && preview && (preview.ok
         ? <p className={preview.warning ? "notice" : "success"}>
             {preview.days} day(s) will be charged
             {preview.available !== null && <>; {preview.available} available, {preview.available - preview.days} left after</>}.
@@ -102,9 +122,9 @@ export function ApplyForm({ types, today }: { types: TypeOption[]; today: string
         <textarea className="input" id="note" name="note" rows={2} maxLength={1000} />
       </div>
 
-      <button className="btn btn-primary hover:cursor-pointer" disabled={pending || (preview !== null && !preview.ok)}>
-        {pending ? "Submitting…" : "Submit request"}
-      </button>
+      <SubmitButton className="btn btn-primary hover:cursor-pointer" disabled={pending || previewPending || (preview !== null && !preview.ok)} pendingText="Submitting request…">
+        Submit request
+      </SubmitButton>
     </form>
   );
 }

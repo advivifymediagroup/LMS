@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SubmitButton } from "../submit-button";
 
 type ConfirmDialogProps = {
   title?: string;
@@ -59,9 +60,9 @@ export default function ConfirmDialog({
               </button>
 
               <form action={action}>
-                <button type="submit" className={confirmClassName}>
+                <SubmitButton type="submit" className={confirmClassName} pendingText="Processing…">
                   {confirmText}
-                </button>
+                </SubmitButton>
               </form>
             </div>
           </div>

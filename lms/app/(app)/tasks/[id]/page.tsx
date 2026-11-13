@@ -8,6 +8,7 @@ import { canEditTask, canMoveTask, dueLabel } from "@/lib/task-rules";
 import { teamsWithMembers } from "@/lib/task-queries";
 import { ActionForm } from "../../action-form";
 import ConfirmDialog from "../../confirm-dialog";
+import { SubmitButton } from "../../../submit-button";
 import { PriorityPill, TASK_COLUMNS } from "../../ui";
 import { deleteTask, setTaskStatus, updateTask } from "../actions";
 import { TaskFields } from "../task-fields";
@@ -43,7 +44,7 @@ export default async function TaskPage({ params }: PageProps<"/tasks/[id]">) {
           <div className="flex flex-wrap gap-2 pt-1">
             {TASK_COLUMNS.filter((c) => c.status !== task.status).map((c) => (
               <form key={c.status} action={setTaskStatus.bind(null, task.id, c.status)}>
-                <button className="btn btn-sm">Move to {c.name}</button>
+                <SubmitButton className="btn btn-sm" pendingText="Moving…">Move to {c.name}</SubmitButton>
               </form>
             ))}
           </div>

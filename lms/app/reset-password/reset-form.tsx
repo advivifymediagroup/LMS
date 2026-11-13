@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState } from "react";
+import { SubmitButton } from "../submit-button";
 
 export function ResetForm({ action }: { action: (s: string | null, f: FormData) => Promise<string | null> }) {
-  const [error, formAction, pending] = useActionState(action, null);
+  const [error, formAction] = useActionState(action, null);
   return (
     <form action={formAction} className="card w-full max-w-sm space-y-4">
       <h1 className="text-xl font-semibold">Set a new password</h1>
@@ -17,7 +18,7 @@ export function ResetForm({ action }: { action: (s: string | null, f: FormData) 
         <label className="label" htmlFor="confirm">Confirm new password</label>
         <input className="input" id="confirm" name="confirm" type="password" autoComplete="new-password" required />
       </div>
-      <button className="btn btn-primary w-full" disabled={pending}>Save password</button>
+      <SubmitButton className="btn btn-primary w-full" pendingText="Saving password…">Save password</SubmitButton>
     </form>
   );
 }

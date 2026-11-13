@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
+import { SubmitButton } from "../submit-button";
 import { changePassword } from "../login/actions";
 
 export default function ChangePasswordPage() {
-  const [error, action, pending] = useActionState(changePassword, null);
+  const [error, action] = useActionState(changePassword, null);
   return (
     <main className="flex min-h-screen items-center justify-center p-4">
       <form action={action} className="card w-full max-w-sm space-y-4">
@@ -23,7 +24,7 @@ export default function ChangePasswordPage() {
           <label className="label" htmlFor="confirm">Confirm new password</label>
           <input className="input" id="confirm" name="confirm" type="password" autoComplete="new-password" required />
         </div>
-        <button className="btn btn-primary w-full hover:cursor-pointer" disabled={pending}>Save password</button>
+        <SubmitButton className="btn btn-primary w-full hover:cursor-pointer" pendingText="Saving password…">Save password</SubmitButton>
       </form>
     </main>
   );

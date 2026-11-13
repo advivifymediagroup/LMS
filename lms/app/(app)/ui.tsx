@@ -2,6 +2,7 @@
 import Link from "next/link";
 import type { TaskPriority, TaskStatus } from "@prisma/client";
 import { initials } from "@/lib/task-rules";
+import { SubmitButton } from "../submit-button";
 import { setTaskStatus } from "./tasks/actions";
 
 export function Avatar({ name, className = "" }: { name: string; className?: string }) {
@@ -40,13 +41,14 @@ export const TASK_COLUMNS: { status: TaskStatus; name: string; dot: string }[] =
 export function TaskCheck({ id, done, disabled }: { id: number; done: boolean; disabled?: boolean }) {
   return (
     <form action={setTaskStatus.bind(null, id, done ? "TODO" : "DONE")}>
-      <button
+      <SubmitButton
         disabled={disabled}
         aria-label={done ? "Reopen task" : "Mark done"}
         className={`grid size-5 cursor-pointer place-items-center rounded-md border-[1.5px] text-xs font-extrabold text-ink disabled:cursor-default ${done ? "border-brand-500 bg-brand-500" : "border-[#c9c4bc] bg-transparent hover:border-char"}`}
+        pendingText="Saving…"
       >
         {done ? "✓" : ""}
-      </button>
+      </SubmitButton>
     </form>
   );
 }

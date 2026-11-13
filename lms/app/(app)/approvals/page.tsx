@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getBalances } from "@/lib/leave";
+import { SubmitButton } from "../../submit-button";
 import { decideLeave } from "../leaves/actions";
 import { LeaveTable, dateRange } from "../leaves/leave-table";
 
@@ -44,8 +45,8 @@ export default async function ApprovalsPage({ searchParams }: PageProps<"/approv
               <p className="text-sm text-gray-700">{l.reason}</p>
               <form action={decideLeave.bind(null, l.id)} className="flex flex-wrap gap-2">
                 <input className="input max-w-md flex-1" name="reason" placeholder="Reason (required to reject)" />
-                <button className="btn btn-primary hover:cursor-pointer" name="decision" value="APPROVE">Approve</button>
-                <button className="btn btn-danger hover:cursor-pointer" name="decision" value="REJECT">Reject</button>
+                <SubmitButton className="btn btn-primary hover:cursor-pointer" name="decision" value="APPROVE" pendingText="Approving…">Approve</SubmitButton>
+                <SubmitButton className="btn btn-danger hover:cursor-pointer" name="decision" value="REJECT" pendingText="Rejecting…">Reject</SubmitButton>
               </form>
             </div>
           );
