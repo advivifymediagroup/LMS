@@ -37,6 +37,39 @@ body {
   @apply bg-paper text-ink;
 }
 
+.loading-spinner {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: none;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 9999px;
+  vertical-align: -0.15em;
+  animation: loading-spin 0.7s linear infinite;
+}
+
+.loading-skeleton {
+  background: linear-gradient(90deg, #ece8e2 25%, #f7f5f2 50%, #ece8e2 75%);
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.5s ease-in-out infinite;
+}
+
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner,
+  .loading-skeleton {
+    animation: none;
+  }
+}
+
 @layer components {
   .input {
     @apply h-[42px] w-full rounded-[10px] border border-gray-300 bg-white px-3 text-sm outline-none focus:border-char;

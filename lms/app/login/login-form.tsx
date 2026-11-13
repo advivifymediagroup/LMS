@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { SubmitButton } from "../submit-button";
 import { login } from "./actions";
 
 export function LoginForm({ notice }: { notice?: string }) {
-  const [error, action, pending] = useActionState(login, null);
+  const [error, action] = useActionState(login, null);
   return (
     <main className="grid min-h-screen bg-paper md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
       <div className="flex flex-col justify-between gap-12 bg-char px-8 py-10 text-paper md:px-14 md:py-12">
@@ -43,7 +44,7 @@ export function LoginForm({ notice }: { notice?: string }) {
           </div>
           <div className="flex items-center justify-between gap-4">
             <Link href="/forgot-password" className="link text-[13px]">Forgot password?</Link>
-            <button className="btn btn-accent h-12 px-7 text-[15px]" disabled={pending}>{pending ? "Signing in…" : "Sign in"}</button>
+            <SubmitButton className="btn btn-accent h-12 px-7 text-[15px]" pendingText="Signing in…">Sign in</SubmitButton>
           </div>
         </form>
       </div>

@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { ActionForm } from "../action-form";
+import { SubmitButton } from "../../submit-button";
 import { deleteDocument, saveDocument } from "./actions";
 
 const size = (n: number) => (n < 1024 * 1024 ? `${Math.ceil(n / 1024)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
@@ -40,7 +41,7 @@ export default async function DocumentsPage() {
                     <input className="input w-64" name="file" type="file" accept="application/pdf,.pdf" aria-label="New PDF" required />
                   </ActionForm>
                   <form action={deleteDocument.bind(null, d.id)}>
-                    <button className="btn btn-danger">Delete</button>
+                    <SubmitButton className="btn btn-danger" pendingText="Deleting…">Delete</SubmitButton>
                   </form>
                 </div>
               </details>

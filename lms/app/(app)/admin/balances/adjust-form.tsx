@@ -1,10 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
+import { SubmitButton } from "../../../submit-button";
 import { adjustBalance } from "../actions";
 
 export function AdjustForm({ userId, types }: { userId: number; types: { id: number; name: string }[] }) {
-  const [state, action, pending] = useActionState(adjustBalance, null);
+  const [state, action] = useActionState(adjustBalance, null);
   return (
     <form action={action} className="card space-y-3">
       <h2 className="font-medium">Manual adjustment</h2>
@@ -18,7 +19,7 @@ export function AdjustForm({ userId, types }: { userId: number; types: { id: num
         </select>
         <input className="input" name="days" type="number" step="0.5" placeholder="+/- days" required />
         <input className="input" name="note" placeholder="Reason (required)" required />
-        <button className="btn btn-primary hover:cursor-pointer" disabled={pending}>Apply</button>
+        <SubmitButton className="btn btn-primary hover:cursor-pointer">Apply</SubmitButton>
       </div>
     </form>
   );

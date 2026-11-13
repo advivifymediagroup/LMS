@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { SubmitButton } from "../../../../submit-button";
 import { importUsers } from "../../actions";
 
 const SAMPLE = `employee_id,name,email,role,department,manager_employee_id,joining_date,CL,SL,OL
 EMP101,Riya Shah,riya@company.com,EMPLOYEE,Engineering,LEAD001,2025-04-01,4.5,3,5`;
 
 export function ImportForm() {
-  const [state, action, pending] = useActionState(importUsers, null);
+  const [state, action] = useActionState(importUsers, null);
   return (
     <div className="space-y-4">
       <Link href="/admin/users" className="text-sm text-brand-600">← Users</Link>
@@ -20,7 +21,7 @@ export function ImportForm() {
       </div>
       <form action={action} className="card flex flex-wrap items-center gap-3">
         <input type="file" name="file" accept=".csv,text/csv" required className="text-sm" />
-        <button className="btn btn-primary" disabled={pending}>{pending ? "Importing…" : "Import"}</button>
+        <SubmitButton className="btn btn-primary" pendingText="Importing users…">Import</SubmitButton>
       </form>
       {state?.error && <p className="error">{state.error}</p>}
       {state?.rows && (

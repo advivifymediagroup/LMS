@@ -5,6 +5,7 @@ import { fromIso, todayIso } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
 import { addHoliday, deleteHoliday } from "../policy-actions";
 import ConfirmDialog from "../../confirm-dialog";
+import { SubmitButton } from "../../../submit-button";
 
 const weekday = (d: Date) => d.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
 
@@ -30,7 +31,7 @@ export default async function HolidaysPage({ searchParams }: PageProps<"/admin/h
         <input className="input" name="date" type="date" required />
         <input className="input" name="name" placeholder="Occasion" required />
         <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isOptional" /> Optional</label>
-        <button className="btn btn-primary">Add</button>
+        <SubmitButton className="btn btn-primary" pendingText="Adding…">Add</SubmitButton>
       </form>
       <p className="text-sm text-gray-600">
         {holidays.length - optionalCount} fixed holidays (office closed, not charged) · {optionalCount} optional holidays (open for Optional Leave).

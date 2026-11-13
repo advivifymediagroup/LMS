@@ -4,12 +4,22 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { probationEnd, todayIso } from "@/lib/leave";
 import { logout } from "../login/actions";
+import { SubmitButton } from "../submit-button";
 import { Avatar } from "./ui";
 import { PageTitle, SideNav, TeamNav, type NavItem } from "./nav";
+import { PortalLoading } from "../loading-ui";
 
 const ROLE_LABEL = { ADMIN: "Admin", LEAD: "Team lead", EMPLOYEE: "Employee" } as const;
 
-export default async function AppLayout({ children }: LayoutProps<"/">) {
+export default function AppLayout({ children }: LayoutProps<"/">) {
+  return (
+    <Suspense fallback={<PortalLoading label="Loading your workspace…" />}>
+      <AppShell>{children}</AppShell>
+    </Suspense>
+  );
+}
+
+async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const today = await todayIso();
   const approver = user.role !== "EMPLOYEE";
@@ -78,7 +88,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             <span className="truncate text-[11.5px] text-[#a9acb2]">{roleLabel}{dept ? ` · ${dept.name}` : ""}</span>
           </Link>
           <form action={logout}>
-            <button title="Sign out" className="cursor-pointer font-mono text-[11px] font-medium text-[#a9acb2] hover:text-brand-400">Exit</button>
+            <SubmitButton title="Sign out" pendingText="Signing out…" className="cursor-pointer font-mono text-[11px] font-medium text-[#a9acb2] hover:text-brand-400">Exit</SubmitButton>
           </form>
         </div>
       </aside>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { SubmitButton } from "../../../submit-button";
 import type { FormState } from "../actions";
 
 type Option = { id: number; name: string };
@@ -15,7 +16,7 @@ export function UserForm({ user, departments, managers, action }: {
   managers: Option[];
   action: (s: FormState, f: FormData) => Promise<FormState>;
 }) {
-  const [state, formAction, pending] = useActionState(action, null);
+  const [state, formAction] = useActionState(action, null);
   return (
     <form key={JSON.stringify(user)} action={formAction} className="card max-w-xl space-y-4">
       {state?.error && <p className="error">{state.error}</p>}
@@ -75,7 +76,7 @@ export function UserForm({ user, departments, managers, action }: {
           </label>
         )}
       </div>
-      <button className="btn btn-primary hover:cursor-pointer" disabled={pending}>{user ? "Save changes" : "Create user"}</button>
+      <SubmitButton className="btn btn-primary hover:cursor-pointer" pendingText={user ? "Saving changes…" : "Creating user…"}>{user ? "Save changes" : "Create user"}</SubmitButton>
     </form>
   );
 }
