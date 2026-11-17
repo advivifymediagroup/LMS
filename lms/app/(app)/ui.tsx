@@ -45,7 +45,7 @@ export function TaskCheck({ id, done, disabled }: { id: number; done: boolean; d
         disabled={disabled}
         aria-label={done ? "Reopen task" : "Mark done"}
         className={`grid size-5 cursor-pointer place-items-center rounded-md border-[1.5px] text-xs font-extrabold text-ink disabled:cursor-default ${done ? "border-brand-500 bg-brand-500" : "border-[#c9c4bc] bg-transparent hover:border-char"}`}
-        pendingText="Saving…"
+        pendingText="" // spinner only: the box is 20px wide
       >
         {done ? "✓" : ""}
       </SubmitButton>
