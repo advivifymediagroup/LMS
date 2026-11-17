@@ -10,7 +10,8 @@
         "test": "node --test lib/*.test.ts",
         "db:up": "docker compose up -d",
         "db:migrate": "prisma migrate dev",
-        "db:seed": "node prisma/seed.mts"
+        "db:seed": "node prisma/seed.mts",
+        "email:preview": "npx -y tsx@4.20.6 scripts-preview-emails.ts"
     },
     "dependencies": {
         "@prisma/client": "^6.19.3",
