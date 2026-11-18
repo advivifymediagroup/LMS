@@ -11,10 +11,12 @@ export default async function BoardPage({ searchParams }: PageProps<"/tasks/boar
   const me = await requireUser();
   const q = await searchParams;
   const today = await todayIso();
-  const teams = await db.department.findMany({ orderBy: { name: "asc" } });
-  // Default to the viewer's team; "all" shows every team.
-  const teamId = q.team === "all" ? null : Number(q.team) || me.departmentId || null;
+  // Admins can switch between every team; everyone else only ever sees their own team's board.
+  const isAdmin = me.role === "ADMIN";
+  const teams = await db.department.findMany({ where: isAdmin ? {} : { id: me.departmentId ?? -1 }, orderBy: { name: "asc" } });
+  const teamId = isAdmin ? (q.team === "all" ? null : Number(q.team) || me.departmentId || null) : me.departmentId;
   const team = teams.find((t) => t.id === teamId) ?? null;
+  if (!isAdmin && !team) return <p className="notice">You&apos;re not in a team yet, so there&apos;s no board to show. Ask an admin to add you to one.</p>;
   const since = fromIso(addDays(today, -30)); // Done column shows the last 30 days
 
   const tasks = await db.task.findMany({
@@ -29,7 +31,7 @@ export default async function BoardPage({ searchParams }: PageProps<"/tasks/boar
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-1.5">
-          <Link href="/tasks/board?team=all" className={chip(!team)}>All teams</Link>
+          {isAdmin && <Link href="/tasks/board?team=all" className={chip(!team)}>All teams</Link>}
           {teams.map((t) => <Link key={t.id} href={`/tasks/board?team=${t.id}`} className={chip(team?.id === t.id)}>{t.name}</Link>)}
         </div>
         <Link href={`/tasks/new${team ? `?team=${team.id}` : ""}`} className="btn btn-accent h-[38px]">+ New task</Link>

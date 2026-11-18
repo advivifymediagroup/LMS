@@ -19,7 +19,7 @@ export default async function EditUserPage({ params }: PageProps<"/admin/users/[
       <Link href="/admin/users" className="text-sm text-brand-600">← Users</Link>
       <h1 className="h1">{user.name} <span className="text-base font-normal text-gray-500">{user.employeeId}</span></h1>
       <UserForm
-        user={{ ...user, joiningDate: toIso(user.joiningDate) }}
+        user={{ ...user, joiningDate: toIso(user.joiningDate), internshipEndDate: user.internshipEndDate && toIso(user.internshipEndDate) }}
         departments={departments}
         managers={managers.filter((m) => m.id !== user.id)}
         action={saveUser.bind(null, user.id)}

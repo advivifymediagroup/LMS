@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { SubmitButton } from "../../../submit-button";
 import type { FormState } from "../actions";
 
@@ -8,6 +8,7 @@ type Option = { id: number; name: string };
 type UserValues = {
   employeeId: string; name: string; email: string; role: string;
   departmentId: number | null; managerId: number | null; joiningDate: string; isActive: boolean; onNoticePeriod: boolean;
+  employmentType: string; internshipEndDate: string | null;
 };
 
 export function UserForm({ user, departments, managers, action }: {
@@ -17,6 +18,7 @@ export function UserForm({ user, departments, managers, action }: {
   action: (s: FormState, f: FormData) => Promise<FormState>;
 }) {
   const [state, formAction] = useActionState(action, null);
+  const [type, setType] = useState(user?.employmentType ?? "PERMANENT");
   return (
     <form key={JSON.stringify(user)} action={formAction} className="card max-w-xl space-y-4">
       {state?.error && <p className="error">{state.error}</p>}
@@ -43,6 +45,19 @@ export function UserForm({ user, departments, managers, action }: {
           <label className="label" htmlFor="joiningDate">Joining date</label>
           <input className="input" id="joiningDate" name="joiningDate" type="date" defaultValue={user?.joiningDate} required />
         </div>
+        <div>
+          <label className="label" htmlFor="employmentType">Employment type</label>
+          <select className="input" id="employmentType" name="employmentType" value={type} onChange={(e) => setType(e.target.value)}>
+            <option value="PERMANENT">Permanent</option>
+            <option value="INTERN">Intern</option>
+          </select>
+        </div>
+        {type === "INTERN" ? (
+          <div>
+            <label className="label" htmlFor="internshipEndDate">Internship end date</label>
+            <input className="input" id="internshipEndDate" name="internshipEndDate" type="date" defaultValue={user?.internshipEndDate ?? ""} required />
+          </div>
+        ) : <div className="hidden sm:block" />}
         <div>
           <label className="label" htmlFor="role">Role</label>
           <select className="input" id="role" name="role" defaultValue={user?.role ?? "EMPLOYEE"}>

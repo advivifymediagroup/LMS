@@ -13,6 +13,11 @@ enum Role {
   EMPLOYEE
 }
 
+enum EmploymentType {
+  PERMANENT
+  INTERN
+}
+
 enum Half {
   FULL
   FIRST
@@ -38,32 +43,37 @@ enum LedgerKind {
 }
 
 model User {
-  id                 Int            @id @default(autoincrement())
-  employeeId         String         @unique
+  id                 Int                 @id @default(autoincrement())
+  employeeId         String              @unique
   name               String
-  email              String         @unique
+  email              String              @unique
   passwordHash       String
-  role               Role           @default(EMPLOYEE)
+  role               Role                @default(EMPLOYEE)
   departmentId       Int?
-  department         Department?    @relation(fields: [departmentId], references: [id])
+  department         Department?         @relation(fields: [departmentId], references: [id])
   managerId          Int?
-  manager            User?          @relation("Reports", fields: [managerId], references: [id])
-  reports            User[]         @relation("Reports")
-  joiningDate        DateTime       @db.Date
-  isActive           Boolean        @default(true)
-  onNoticePeriod     Boolean        @default(false)
-  mustChangePassword Boolean        @default(true)
-  createdAt          DateTime       @default(now())
-  leaves             LeaveRequest[] @relation("Applicant")
-  decisions          LeaveRequest[] @relation("Approver")
-  ledger             LeaveLedger[]  @relation("LedgerUser")
-  ledgerEntries      LeaveLedger[]  @relation("LedgerCreator")
+  manager            User?               @relation("Reports", fields: [managerId], references: [id])
+  reports            User[]              @relation("Reports")
+  joiningDate        DateTime            @db.Date
+  isActive           Boolean             @default(true)
+  onNoticePeriod     Boolean             @default(false)
+  employmentType     EmploymentType      @default(PERMANENT)
+  internshipEndDate  DateTime?           @db.Date
+  mustChangePassword Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  leaves             LeaveRequest[]      @relation("Applicant")
+  decisions          LeaveRequest[]      @relation("Approver")
+  ledger             LeaveLedger[]       @relation("LedgerUser")
+  ledgerEntries      LeaveLedger[]       @relation("LedgerCreator")
   documents          Document[]
   passwordResets     PasswordReset[]
-  auditActions       AuditLog[]     @relation("AuditActor")
-  auditSubjects      AuditLog[]     @relation("AuditTargetUser")
-  tasksAssigned      Task[]         @relation("TaskAssignee")
-  tasksCreated       Task[]         @relation("TaskCreator")
+  auditActions       AuditLog[]          @relation("AuditActor")
+  auditSubjects      AuditLog[]          @relation("AuditTargetUser")
+  tasksAssigned      Task[]              @relation("TaskAssignee")
+  performanceReports PerformanceReport[] @relation("ReportAuthor")
+  reportsReviewed    PerformanceReport[] @relation("ReportReviewer")
+  invoicesCreated    Invoice[]
+  tasksCreated       Task[]              @relation("TaskCreator")
 }
 
 model AuditLog {
@@ -113,6 +123,8 @@ model Task {
   title        String
   description  String?
   kind         String       @default("Task")
+  // Team-specific fields (see lib/team-config.ts), e.g. { "type": "Bug fix", "project": "OfferCarnival" }
+  fields       Json         @default("{}")
   status       TaskStatus   @default(TODO)
   priority     TaskPriority @default(MED)
   dueDate      DateTime?    @db.Date
@@ -124,37 +136,39 @@ model Task {
   createdBy    User         @relation("TaskCreator", fields: [createdById], references: [id])
   completedAt  DateTime?
   createdAt    DateTime     @default(now())
+  // Set on tasks the daily job creates (e.g. "intern-end:12:2027-03-31"), so it never creates one twice.
+  autoKey      String?      @unique
 
   @@index([departmentId, status])
   @@index([assigneeId, status])
 }
 
 model LeaveType {
-  id                  Int            @id @default(autoincrement())
-  code                String         @unique
-  name                String
-  monthlyCredit       Decimal        @default(0) @db.Decimal(4, 1)
+  id                   Int            @id @default(autoincrement())
+  code                 String         @unique
+  name                 String
+  monthlyCredit        Decimal        @default(0) @db.Decimal(4, 1)
   // Credited each January; pro-rated for joiners in their first year.
-  yearlyQuota         Decimal        @default(0) @db.Decimal(4, 1)
+  yearlyQuota          Decimal        @default(0) @db.Decimal(4, 1)
   // Balance above this expires at year end. null = never expires.
-  maxCarryForward     Decimal?       @db.Decimal(4, 1)
-  needsBalance        Boolean        @default(true)
-  allowHalfDay        Boolean        @default(true)
-  sandwichCounts      Boolean        @default(false)
-  backdateDays        Int            @default(0)
-  noticeDays          Int            @default(0)
+  maxCarryForward      Decimal?       @db.Decimal(4, 1)
+  needsBalance         Boolean        @default(true)
+  allowHalfDay         Boolean        @default(true)
+  sandwichCounts       Boolean        @default(false)
+  backdateDays         Int            @default(0)
+  noticeDays           Int            @default(0)
   // Leaves longer than longLeaveDays need longNoticeDays' notice instead of noticeDays.
-  longLeaveDays       Int?
-  longNoticeDays      Int            @default(0)
+  longLeaveDays        Int?
+  longNoticeDays       Int            @default(0)
   // Can't be applied during probation (monthly credits are held until it ends) / notice period.
-  blockedOnProbation  Boolean        @default(false)
-  blockedOnNotice     Boolean        @default(false)
+  blockedOnProbation   Boolean        @default(false)
+  blockedOnNotice      Boolean        @default(false)
   // Show a medical-certificate reminder above this many days.
   certificateAfterDays Int?
-  optionalHolidayOnly Boolean        @default(false)
-  isActive            Boolean        @default(true)
-  requests            LeaveRequest[]
-  ledger              LeaveLedger[]
+  optionalHolidayOnly  Boolean        @default(false)
+  isActive             Boolean        @default(true)
+  requests             LeaveRequest[]
+  ledger               LeaveLedger[]
 }
 
 model LeaveLedger {
@@ -235,4 +249,60 @@ model PasswordReset {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   expiresAt DateTime
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+}
+
+// Monthly performance report. `data` follows ReportData in lib/team-config.ts;
+// attendance is worked out from leave records when the report is shown, never typed in.
+model PerformanceReport {
+  id              Int          @id @default(autoincrement())
+  userId          Int
+  user            User         @relation("ReportAuthor", fields: [userId], references: [id])
+  month           String // "2026-10"
+  team            String? // team name when created; picks the template
+  designation     String       @default("")
+  data            Json
+  status          ReportStatus @default(DRAFT)
+  submittedAt     DateTime?
+  reviewerComment String?
+  reviewedById    Int?
+  reviewedBy      User?        @relation("ReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([userId, month])
+  @@index([month])
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  CANCELLED
+}
+
+// Finance team invoices. "Overdue" isn't stored: it's SENT with a due date in the past.
+model Invoice {
+  id          Int           @id @default(autoincrement())
+  number      String        @unique
+  client      String
+  description String?
+  amount      Decimal       @db.Decimal(12, 2)
+  currency    String        @default("INR")
+  issueDate   DateTime      @db.Date
+  dueDate     DateTime      @db.Date
+  status      InvoiceStatus @default(DRAFT)
+  paidDate    DateTime?     @db.Date
+  notes       String?
+  createdById Int
+  createdBy   User          @relation(fields: [createdById], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status, dueDate])
 }

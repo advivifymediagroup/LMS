@@ -25,15 +25,20 @@ const userSchema = z.object({
   departmentId: optionalId,
   managerId: optionalId,
   joiningDate: z.iso.date("Joining date is required"),
+  employmentType: z.enum(["PERMANENT", "INTERN"]).default("PERMANENT"),
+  internshipEndDate: z.preprocess((v) => v || null, z.iso.date().nullable()),
 });
 
 export async function saveUser(id: number | null, _: FormState, form: FormData): Promise<FormState> {
   const actor = await requireUser(["ADMIN"]);
   const parsed = userSchema.safeParse(Object.fromEntries(form));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { joiningDate, ...rest } = parsed.data;
+  const { joiningDate, internshipEndDate, ...rest } = parsed.data;
   if (id && rest.managerId === id) return { error: "A user can't be their own manager." };
-  const data = { ...rest, joiningDate: fromIso(joiningDate) };
+  const intern = rest.employmentType === "INTERN";
+  if (intern && !internshipEndDate) return { error: "Interns need an internship end date." };
+  if (intern && internshipEndDate! <= joiningDate) return { error: "Internship end date must be after the joining date." };
+  const data = { ...rest, joiningDate: fromIso(joiningDate), internshipEndDate: intern ? fromIso(internshipEndDate!) : null };
 
   try {
     if (id) {

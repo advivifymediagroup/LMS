@@ -4,8 +4,9 @@ import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { todayIso } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
-import { canEditTask, canMoveTask, dueLabel } from "@/lib/task-rules";
+import { canEditTask, canMoveTask, canViewTask, dueLabel } from "@/lib/task-rules";
 import { teamsWithMembers } from "@/lib/task-queries";
+import { TASK_FIELDS } from "@/lib/team-config";
 import { ActionForm } from "../../action-form";
 import ConfirmDialog from "../../confirm-dialog";
 import { SubmitButton } from "../../../submit-button";
@@ -19,9 +20,11 @@ export default async function TaskPage({ params }: PageProps<"/tasks/[id]">) {
   const task = Number.isInteger(id)
     ? await db.task.findUnique({ where: { id }, include: { department: true, assignee: true, createdBy: true } })
     : null;
-  if (!task) notFound();
+  if (!task || !canViewTask(me, task)) notFound();
   const [today, all] = await Promise.all([todayIso(), teamsWithMembers()]);
   const editable = canEditTask(me, task);
+  const values = task.fields as Record<string, string>;
+  const extra = (TASK_FIELDS[task.department?.name ?? ""] ?? []).filter((fd) => values[fd.key]);
   const teams = me.role === "ADMIN" ? all : all.filter((t) => t.id === me.departmentId || t.id === task.departmentId);
 
   return (
@@ -39,6 +42,12 @@ export default async function TaskPage({ params }: PageProps<"/tasks/[id]">) {
           <div><dt className="eyebrow">Assignee</dt><dd className="font-semibold">{task.assignee?.name ?? "Unassigned"}</dd></div>
           <div><dt className="eyebrow">Due</dt><dd className="font-mono">{dueLabel(task.dueDate && toIso(task.dueDate), today)}</dd></div>
           <div><dt className="eyebrow">Created by</dt><dd>{task.createdBy.name}</dd></div>
+          {extra.map((fd) => (
+            <div key={fd.key}>
+              <dt className="eyebrow">{fd.label}</dt>
+              <dd className="font-semibold break-words">{fd.type === "url" ? <a className="link" href={values[fd.key]} target="_blank" rel="noreferrer">Open link</a> : values[fd.key]}</dd>
+            </div>
+          ))}
         </dl>
         {!editable && canMoveTask(me, task) && (
           <div className="flex flex-wrap gap-2 pt-1">

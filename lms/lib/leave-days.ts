@@ -91,3 +91,22 @@ export function countLeaveDays(
   if (days[days.length - 1] && endHalf !== "FULL") total -= 0.5;
   return total;
 }
+
+/** Next work anniversary on or after `today` (at least 1 year after joining), with the year count. */
+export function nextAnniversary(joiningIso: string, today: string): { date: string; years: number } {
+  let years = Math.max(1, Number(today.slice(0, 4)) - Number(joiningIso.slice(0, 4)));
+  let date = addMonths(joiningIso, 12 * years);
+  if (date < today) date = addMonths(joiningIso, 12 * ++years);
+  return { date, years };
+}
+
+/** A weekday `days` before `iso`, moved back off a weekend, but never earlier than `notBefore`. */
+export function weekdayBefore(iso: string, days: number, notBefore: string): string {
+  let d = addDays(iso, -days);
+  while (dayOfWeek(d) === 0 || dayOfWeek(d) === 6) d = addDays(d, -1);
+  if (d < notBefore) {
+    d = notBefore;
+    while (dayOfWeek(d) === 0 || dayOfWeek(d) === 6) d = addDays(d, 1);
+  }
+  return d;
+}

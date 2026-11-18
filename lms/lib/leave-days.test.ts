@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { countLeaveDays, firstCreditMonth, monthRange, proRatedQuota, type DayCountOptions } from "./leave-days.ts";
+import { countLeaveDays, firstCreditMonth, monthRange, nextAnniversary, proRatedQuota, weekdayBefore, type DayCountOptions } from "./leave-days.ts";
 
 // 2026-11-02 is a Monday.
 const base: DayCountOptions = { workingDays: [1, 2, 3, 4, 5], holidays: new Set(), sandwichCounts: false };
@@ -61,4 +61,16 @@ test("yearly quota is pro-rated by months left, rounded down to 0.5", () => {
   assert.equal(proRatedQuota(8, "2026-07"), 4);
   assert.equal(proRatedQuota(5, "2026-10"), 1);   // 5 * 3/12 = 1.25
   assert.equal(proRatedQuota(8, "2026-12"), 0.5); // 0.67
+});
+
+test("nextAnniversary", () => {
+  assert.deepEqual(nextAnniversary("2024-03-10", "2026-03-01"), { date: "2026-03-10", years: 2 });
+  assert.deepEqual(nextAnniversary("2024-03-10", "2026-03-11"), { date: "2027-03-10", years: 3 });
+  assert.deepEqual(nextAnniversary("2026-01-01", "2026-11-18"), { date: "2027-01-01", years: 1 });
+});
+
+test("weekdayBefore", () => {
+  assert.equal(weekdayBefore("2027-03-31", 7, "2027-03-01"), "2027-03-24"); // Wed
+  assert.equal(weekdayBefore("2027-04-04", 7, "2027-03-01"), "2027-03-26"); // Sun -> Fri
+  assert.equal(weekdayBefore("2027-03-31", 7, "2027-03-27"), "2027-03-29"); // too late: next weekday after notBefore (Sat -> Mon)
 });

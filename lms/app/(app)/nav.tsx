@@ -59,6 +59,8 @@ const SECTIONS: [string, string][] = [
   ["/tasks/board", "Task board"],
   ["/tasks", "Tasks"],
   ["/analytics", "Team analytics"],
+  ["/reports", "Monthly reports"],
+  ["/finance", "Finance"],
   ["/documents", "Policies"],
   ["/profile", "Profile"],
   ["/admin/users", "Users & roles"],

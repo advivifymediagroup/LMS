@@ -44,3 +44,8 @@ export function canEditTask(me: Actor, t: TaskRef): boolean {
 export function canMoveTask(me: Actor, t: TaskRef): boolean {
   return canEditTask(me, t) || t.assigneeId === me.id;
 }
+
+/** Seeing a task at all: admins see every team; everyone else only their own team's tasks (and any assigned to them). */
+export function canViewTask(me: Actor, t: TaskRef): boolean {
+  return me.role === "ADMIN" || t.assigneeId === me.id || (t.departmentId !== null && t.departmentId === me.departmentId);
+}

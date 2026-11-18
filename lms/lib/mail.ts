@@ -4,7 +4,7 @@ import { getSetting } from "./leave";
 export type SmtpSettings = { host: string; port: number; secure: boolean; user: string; pass: string; from: string };
 
 /** Sends one email (plain text, plus HTML when given) using the SMTP settings. Throws on SMTP errors. */
-export async function sendMail(msg: { to: string[]; cc?: string[]; subject: string; text: string; html?: string }) {
+export async function sendMail(msg: { to: string[]; cc?: string[]; subject: string; text: string; html?: string; ics?: string }) {
   const to = [...new Set(msg.to.filter(Boolean))];
   const cc = [...new Set((msg.cc ?? []).filter((e) => e && !to.includes(e)))];
   if (!to.length) return;
@@ -19,7 +19,7 @@ export async function sendMail(msg: { to: string[]; cc?: string[]; subject: stri
     secure: smtp.secure,
     auth: smtp.user ? { user: smtp.user, pass: smtp.pass } : undefined,
   });
-  await transport.sendMail({ from: smtp.from, to, cc, subject: msg.subject, text: msg.text, html: msg.html });
+  await transport.sendMail({ from: smtp.from, to, cc, subject: msg.subject, text: msg.text, html: msg.html, icalEvent: msg.ics ? { method: "REQUEST", content: msg.ics } : undefined });
 }
 
 /** Notification emails must never break the action that triggered them. */
