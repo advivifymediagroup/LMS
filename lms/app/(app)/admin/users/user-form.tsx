@@ -6,8 +6,9 @@ import type { FormState } from "../actions";
 
 type Option = { id: number; name: string };
 type UserValues = {
-  employeeId: string; name: string; email: string; role: string;
-  departmentId: number | null; managerId: number | null; joiningDate: string; isActive: boolean; onNoticePeriod: boolean;
+  name: string; email: string; role: string;
+  departmentId: number | null; managerId: number | null; joiningDate: string; isActive: boolean;
+  onNoticePeriod: boolean;
   employmentType: string; internshipEndDate: string | null;
 };
 
@@ -29,10 +30,9 @@ export function UserForm({ user, departments, managers, action }: {
         </p>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="label" htmlFor="employeeId">Employee ID</label>
-          <input className="input" id="employeeId" name="employeeId" defaultValue={user?.employeeId} required />
-        </div>
+        <p className="text-sm text-gray-600 sm:col-span-2">
+        Employee ID will be generated automatically based on the selected role.
+        </p>
         <div>
           <label className="label" htmlFor="name">Name</label>
           <input className="input" id="name" name="name" defaultValue={user?.name} required />
