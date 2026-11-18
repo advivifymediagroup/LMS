@@ -18,7 +18,6 @@ const optionalId = z.preprocess((v) => (v ? Number(v) : null), z.number().int().
 const isUnique = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 
 const userSchema = z.object({
-  employeeId: z.string().trim().min(1, "Employee ID is required").max(20).transform((s) => s.toUpperCase()),
   name: z.string().trim().min(1, "Name is required").max(100),
   email: z.string().trim().toLowerCase().pipe(z.email("Invalid email")),
   role: z.enum(["ADMIN", "LEAD", "EMPLOYEE"]),
@@ -28,6 +27,33 @@ const userSchema = z.object({
   employmentType: z.enum(["PERMANENT", "INTERN"]).default("PERMANENT"),
   internshipEndDate: z.preprocess((v) => v || null, z.iso.date().nullable()),
 });
+
+const employeeIdPrefixes: Record<Role, string> = {
+  ADMIN: "ADM",
+  LEAD: "LEAD",
+  EMPLOYEE: "EMP",
+};
+
+async function nextEmployeeId(
+  tx: Prisma.TransactionClient,
+  role: Role
+) {
+  const prefix = employeeIdPrefixes[role];
+
+  const counter = await tx.employeeIdCounter.update({
+    where: { role },
+    data: {
+      lastNumber: {
+        increment: 1,
+      },
+    },
+    select: {
+      lastNumber: true,
+    },
+  });
+
+  return `${prefix}${String(counter.lastNumber).padStart(3, "0")}`;
+}
 
 export async function saveUser(id: number | null, _: FormState, form: FormData): Promise<FormState> {
   const actor = await requireUser(["ADMIN"]);
@@ -41,23 +67,47 @@ export async function saveUser(id: number | null, _: FormState, form: FormData):
   const data = { ...rest, joiningDate: fromIso(joiningDate), internshipEndDate: intern ? fromIso(internshipEndDate!) : null };
 
   try {
-    if (id) {
-      const before = await db.user.findUnique({ where: { id } });
-      await db.$transaction(async (tx) => {
-        await tx.user.update({ where: { id }, data: { ...data, isActive: form.get("isActive") === "on", onNoticePeriod: form.get("onNoticePeriod") === "on" } });
-        await writeAudit(tx, { actorId: actor.id, targetUserId: id, action: "UPDATE", entityType: "USER", entityId: id, before, after: { ...data, isActive: form.get("isActive") === "on", onNoticePeriod: form.get("onNoticePeriod") === "on" } });
-      });
-      revalidatePath("/admin/users");
-      return { ok: "Saved." };
-    }
+if (id) {
+  const before = await db.user.findUnique({ where: { id } });
+  if (!before) {
+    return { error: "User not found." };
+  }
+  await db.$transaction(async (tx) => {
+    const updateData = {
+      ...data,
+      isActive: form.get("isActive") === "on",
+      onNoticePeriod: form.get("onNoticePeriod") === "on",
+    };
+
+    await tx.user.update({
+      where: { id },
+      data: updateData,
+    });
+
+    await writeAudit(tx, {
+      actorId: actor.id,
+      targetUserId: id,
+      action: "UPDATE",
+      entityType: "USER",
+      entityId: id,
+      before,
+      after: updateData,
+    });
+  });
+
+  revalidatePath("/admin/users");
+  return { ok: "Saved." };
+}
     const pw = tempPassword();
-    await db.$transaction(async (tx) => {
-      const user = await tx.user.create({ data: { ...data, passwordHash: await bcrypt.hash(pw, 10), mustChangePassword: true } });
-      await writeAudit(tx, { actorId: actor.id, targetUserId: user.id, action: "CREATE", entityType: "USER", entityId: user.id, after: data });
-      return user;
+    const employeeId = await db.$transaction(async (tx) => {
+      const employeeId = await nextEmployeeId(tx, rest.role);
+      const createData = { ...data, employeeId, passwordHash: await bcrypt.hash(pw, 10), mustChangePassword: true };
+      const user = await tx.user.create({ data: createData });
+      await writeAudit(tx, { actorId: actor.id, targetUserId: user.id, action: "CREATE", entityType: "USER", entityId: user.id, after: { ...data, employeeId } });
+      return employeeId;
     });
     revalidatePath("/admin/users");
-    return { ok: `Created ${rest.employeeId}.`, tempPassword: pw };
+    return { ok: `Created ${employeeId}.`, tempPassword: pw };
   } catch (e) {
     if (isUnique(e)) return { error: "That Employee ID or email already exists." };
     throw e;
