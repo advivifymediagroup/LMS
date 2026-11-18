@@ -306,3 +306,8 @@ model Invoice {
 
   @@index([status, dueDate])
 }
+
+model EmployeeIdCounter {
+  role       Role @id
+  lastNumber Int  @default(0)
+}
