@@ -202,7 +202,9 @@ export async function importUsers(_: ImportResult, form: FormData): Promise<Impo
     const cells = line.split(",").map((c) => c.trim());
     const get = (h: string) => cells[header!.indexOf(h)] ?? "";
     const lineNo = i + 2;
-    const parsed = userSchema.omit({ departmentId: true, managerId: true }).safeParse({
+    const parsed = userSchema.omit({ departmentId: true, managerId: true }).extend({
+      employeeId: z.string().trim().min(1, "Employee ID is required").max(20).transform((s) => s.toUpperCase()),
+    }).safeParse({
       employeeId: get("employee_id"),
       name: get("name"),
       email: get("email"),
