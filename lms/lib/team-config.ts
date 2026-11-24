@@ -40,6 +40,12 @@ export const TASK_FIELDS: Record<string, TaskField[]> = {
     f("brief", "Brief link", "url"),
     f("revisions", "Revision rounds", "number"),
   ],
+  Delivery: [
+    f("campaign", "Campaign"),
+    f("publisher", "Publisher"),
+    sel("stage", "Stage", ["Onboarding", "Live", "Optimising", "Validation", "Paused"]),
+    f("geo", "GEO"),
+  ],
   Finance: [
     sel("category", "Category", ["Invoice", "Payment", "Payroll", "Reimbursement", "Appraisal", "Compliance", "Other"]),
     f("amount", "Amount (₹)", "number"),

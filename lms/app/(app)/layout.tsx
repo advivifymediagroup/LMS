@@ -35,6 +35,13 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   ]);
   const finance = user.role === "ADMIN" || dept?.name === "Finance";
   const financeTeamId = user.role === "ADMIN" ? (await db.department.findUnique({ where: { name: "Finance" } }))?.id : dept?.id;
+  // Affiliate Operations: Sales and Delivery see their own side; Finance, Leadership and admins see both.
+  const seesAll = finance || dept?.name === "Leadership";
+  const affiliate: NavItem[] = [
+    ...(seesAll || dept?.name === "Sales" ? [{ href: "/affiliate/sales", label: "Sales validations" }] : []),
+    ...(seesAll || dept?.name === "Delivery" ? [{ href: "/affiliate/delivery", label: "Delivery validations" }] : []),
+  ];
+  if (affiliate.length) affiliate.push({ href: "/affiliate/directory", label: "Clients & publishers" });
   const roleLabel = user.role === "EMPLOYEE" && today < probation ? "New hire" : ROLE_LABEL[user.role];
 
   const nav: NavItem[] = [
@@ -69,6 +76,12 @@ async function AppShell({ children }: { children: React.ReactNode }) {
           <div className={heading}>Workspace</div>
           <SideNav items={nav} />
         </nav>
+        {affiliate.length > 0 && (
+          <nav className="flex gap-0.5 overflow-x-auto md:flex-col md:overflow-visible">
+            <div className={heading}>Affiliate Operations</div>
+            <SideNav items={affiliate} />
+          </nav>
+        )}
         {finance && (
           <nav className="flex gap-0.5 overflow-x-auto md:flex-col md:overflow-visible">
             <div className={heading}>Finance</div>

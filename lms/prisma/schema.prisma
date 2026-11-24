@@ -74,6 +74,8 @@ model User {
   reportsReviewed    PerformanceReport[] @relation("ReportReviewer")
   invoicesCreated    Invoice[]
   tasksCreated       Task[]              @relation("TaskCreator")
+  validations        Validation[]
+  validationFiles    ValidationFile[]
 }
 
 model AuditLog {
@@ -310,4 +312,130 @@ model Invoice {
 model EmployeeIdCounter {
   role       Role @id
   lastNumber Int  @default(0)
+}
+
+// ---------- Affiliate validations ----------
+// One table for both sides; SALES (client approves revenue) and DELIVERY (we owe a publisher)
+// keep separate numbering, statuses, access and pages. Shared campaign ties them together.
+
+enum ValidationSide {
+  SALES
+  DELIVERY
+}
+
+enum OfferModel {
+  CPI
+  CPA
+  CPS
+  CPL
+  CPR
+}
+
+enum Platform {
+  ANDROID
+  IOS
+  WEB
+}
+
+// Union of both sides' statuses; lib/affiliate-rules.ts says which apply to which side.
+enum ValidationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  PENDING_FINANCE_REVIEW
+  READY_TO_SEND
+  SENT_TO_PUBLISHER
+  ACKNOWLEDGED
+  DISPUTED
+  REVISED
+  APPROVED
+  PARTIALLY_APPROVED
+  INVOICE_RECEIVED
+  PAYMENT_PENDING
+  PAID
+  CLOSED
+}
+
+model Advertiser {
+  id        Int        @id @default(autoincrement())
+  name      String     @unique
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  campaigns Campaign[]
+}
+
+model Campaign {
+  id           Int          @id @default(autoincrement())
+  advertiserId Int
+  advertiser   Advertiser   @relation(fields: [advertiserId], references: [id])
+  name         String
+  geo          String?
+  platform     Platform?
+  offerModel   OfferModel?
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  validations  Validation[]
+
+  @@unique([advertiserId, name])
+}
+
+model Publisher {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  code        String?      @unique
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  validations Validation[]
+}
+
+model Validation {
+  id                  Int              @id @default(autoincrement())
+  side                ValidationSide
+  number              String           @unique
+  month               String // YYYY-MM
+  campaignId          Int
+  campaign            Campaign         @relation(fields: [campaignId], references: [id])
+  publisherId         Int? // DELIVERY only
+  publisher           Publisher?       @relation(fields: [publisherId], references: [id])
+  clientRef           String? // SALES: advertiser's campaign ID
+  geo                 String
+  platform            Platform?
+  offerModel          OfferModel
+  totalConversions    Int
+  approvedConversions Int
+  rejectedConversions Int
+  payoutRate          Decimal?         @db.Decimal(14, 4) // DELIVERY only
+  amount              Decimal          @db.Decimal(14, 2) // SALES: approved amount; DELIVERY: gross amount
+  deduction           Decimal          @default(0) @db.Decimal(14, 2)
+  netAmount           Decimal          @db.Decimal(14, 2) // amount - deduction
+  currency            String
+  invoiceNumber       String? // DELIVERY only
+  invoiceDate         DateTime?        @db.Date
+  sentDate            DateTime?        @db.Date
+  remarks             String?
+  status              ValidationStatus @default(DRAFT)
+  submittedAt         DateTime?
+  createdById         Int
+  createdBy           User             @relation(fields: [createdById], references: [id])
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  files               ValidationFile[]
+
+  @@index([side, month])
+  @@index([campaignId, month])
+  @@index([side, status])
+}
+
+// Every upload is kept; files are never replaced. Stored in the DB like policy PDFs.
+model ValidationFile {
+  id           Int        @id @default(autoincrement())
+  validationId Int
+  validation   Validation @relation(fields: [validationId], references: [id], onDelete: Cascade)
+  fileName     String
+  contentType  String
+  size         Int
+  data         Bytes
+  uploadedById Int
+  uploadedBy   User       @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime   @default(now())
 }
