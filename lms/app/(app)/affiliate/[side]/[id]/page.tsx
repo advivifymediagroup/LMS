@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { actorFor, getValidation, requireAffiliate } from "@/lib/affiliate";
-import { allowedMoves, canEditRecord, FILE_ACCEPT, NEEDS_NOTE, PLATFORMS, SIDES, STATUS_LABEL, sideFromSlug, type Status } from "@/lib/affiliate-rules";
+import { allowedMoves, canEditRecord, FILE_ACCEPT, NEEDS_NOTE, needsRevision, PAYMENT_LABEL, payment, PLATFORMS, REVISABLE, REVISION_TO, SIDES, STATUS_LABEL, sideFromSlug, type Status } from "@/lib/affiliate-rules";
 import { todayIso } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
 import { ActionForm } from "../../../action-form";
@@ -18,8 +18,11 @@ const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB
 const TRACKED: [string, string][] = [
   ["totalConversions", "Total conv."], ["approvedConversions", "Approved conv."], ["rejectedConversions", "Rejected conv."],
   ["payoutRate", "Payout rate"], ["amount", "Amount"], ["deduction", "Deduction"], ["netAmount", "Net"], ["currency", "Currency"],
-  ["month", "Month"], ["geo", "GEO"], ["invoiceNumber", "Invoice no."],
+  ["month", "Month"], ["geo", "GEO"], ["invoiceNumber", "Invoice no."], ["invoiceDate", "Invoice date"],
+  ["approvedAmount", "Approved part"], ["paidDate", "Paid on"], ["paymentRef", "Payment ref."],
 ];
+// Audit values: dates are stored as ISO timestamps; show just the day.
+const show = (x: unknown) => (x == null || x === "" ? "—" : String(x).replace(/^(\d{4}-\d{2}-\d{2})T00:00:00\.000Z$/, "$1"));
 
 export default async function ValidationPage({ params }: PageProps<"/affiliate/[side]/[id]">) {
   const { side: slug, id } = await params;
@@ -33,6 +36,7 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
   const actor = actorFor(a, side);
   const moves = allowedMoves(side, v.status, actor);
   const editable = canEditRecord(side, v.status, actor);
+  const revising = needsRevision(side, v.status);
   const canUpload = actor.admin || actor.team || actor.finance;
   const delivery = side === "DELIVERY";
 
@@ -51,6 +55,10 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
     ...(delivery
       ? ([["Publisher ID", <span key="p" className="font-mono">{v.publisher?.code ?? "—"}</span>], ["Sent to publisher", v.sentDate ? toIso(v.sentDate) : "—"]] as [string, React.ReactNode][])
       : ([["Client campaign ID", <span key="c" className="font-mono">{v.clientRef ?? "—"}</span>]] as [string, React.ReactNode][])),
+    ...(delivery
+      ? ([["Payment", PAYMENT_LABEL[payment(v.status)]], ...(v.paidDate ? [["Paid on", toIso(v.paidDate)]] : []),
+          ...(v.paymentRef ? [["Payment ref.", <span key="r" className="font-mono">{v.paymentRef}</span>]] : [])] as [string, React.ReactNode][])
+      : []),
     ["Uploaded by", v.createdBy.name],
     ["Created", when(v.createdAt)],
   ];
@@ -68,7 +76,7 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
       <div className="flex min-w-0 flex-col gap-4">
         <Link href={base} className="link text-sm">← {meta.label} validations</Link>
         <div className="card space-y-4">
-          <div className="flex flex-wrap items-center gap-2"><span className="eyebrow font-mono">{v.number}</span><ValidationStatus s={v.status} /></div>
+          <div className="flex flex-wrap items-center gap-2"><span className="eyebrow font-mono">{v.number}</span><ValidationStatus s={v.status} />{v.revision > 0 && <span className="pill border border-gray-300 text-char">Revision {v.revision}</span>}</div>
           <div>
             <h1 className="text-[22px] font-extrabold tracking-[-0.02em]">{v.campaign.advertiser.name} · {v.campaign.name}</h1>
             {delivery && <p className="text-sm text-gray-600">Publisher: <span className="font-semibold text-ink">{v.publisher?.name}</span></p>}
@@ -79,6 +87,7 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
           <dl className="grid grid-cols-2 gap-3 border-t border-[#f0ece6] pt-3 text-sm sm:grid-cols-3">
             {figures.map(([k, val]) => <div key={k}><dt className="eyebrow">{k}</dt><dd className="font-mono">{val}</dd></div>)}
             <div><dt className="eyebrow">{delivery ? "Net invoice amount" : "Net validated revenue"}</dt><dd className="font-mono text-[17px] font-extrabold">{amount(v.netAmount, v.currency)}</dd></div>
+            {v.approvedAmount != null && <div><dt className="eyebrow">Finance approved (partial)</dt><dd className="font-mono text-[17px] font-extrabold">{amount(v.approvedAmount, v.currency)}</dd></div>}
           </dl>
           {delivery && (v.invoiceNumber || v.invoiceDate) && (
             <p className="text-sm">Invoice <span className="font-mono">{v.invoiceNumber ?? "—"}</span>{v.invoiceDate && <> dated <span className="font-mono">{toIso(v.invoiceDate)}</span></>}</p>
@@ -90,15 +99,19 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
           <section className="card space-y-2">
             <h2 className="card-title">Next step</h2>
             <MoveForm action={moveValidation.bind(null, v.id)} moves={moves.map(({ to, label }) => ({ to, label }))}
-              notesFor={NEEDS_NOTE.filter((s) => moves.some((mv) => mv.to === s)).map((s) => STATUS_LABEL[s].toLowerCase())} />
+              notesFor={NEEDS_NOTE.filter((s) => moves.some((mv) => mv.to === s)).map((s) => STATUS_LABEL[s].toLowerCase())}
+              net={amount(v.netAmount, v.currency)} invoiceNumber={v.invoiceNumber} today={today} />
           </section>
         )}
 
         {editable ? (
           <>
-            <h2 className="card-title">Edit figures</h2>
+            <h2 className="card-title">{revising ? "Revise figures" : "Edit figures"}</h2>
             {a.admin && !actor.team && <p className="text-sm text-gray-600">You&apos;re editing as admin. Every change is recorded in the history.</p>}
-            <ValidationForm side={side} action={saveValidation.bind(null, side, v.id)} campaigns={campaigns} publishers={publishers} v={v} month={today.slice(0, 7)} />
+            <ValidationForm side={side} action={saveValidation.bind(null, side, v.id)} campaigns={campaigns} publishers={publishers} v={v} month={today.slice(0, 7)}
+              revision={!revising ? undefined : REVISABLE[side].includes(v.status)
+                ? `This record is ${STATUS_LABEL[v.status].toLowerCase()}. Saving moves it to ${STATUS_LABEL[REVISION_TO[side]].toLowerCase()} for review again.`
+                : `Payment is under way, so the status stays ${STATUS_LABEL[v.status].toLowerCase()}.`} />
           </>
         ) : actor.team && (
           <p className="text-sm text-gray-600">Figures are locked while the record is {STATUS_LABEL[v.status].toLowerCase()}.</p>
@@ -132,14 +145,17 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
               const before = (h.before ?? {}) as Record<string, unknown>;
               const after = (h.after ?? {}) as Record<string, unknown>;
               const meta = (h.metadata ?? {}) as { note?: string; file?: string };
-              const changes = h.action === "UPDATE" ? TRACKED.filter(([k]) => String(before[k] ?? "") !== String(after[k] ?? "")) : [];
+              const changes = h.action === "UPDATE" || h.action === "REVISION" ? TRACKED.filter(([k]) => show(before[k]) !== show(after[k]))
+                : h.action === "STATUS" ? TRACKED.filter(([k]) => k in after) : [];
+              const moved = after.status && before.status !== after.status ? `${STATUS_LABEL[before.status as Status] ?? before.status} → ${STATUS_LABEL[after.status as Status] ?? after.status}` : "";
               const title = h.action === "CREATE" ? "Created"
-                : h.action === "STATUS" ? `${STATUS_LABEL[before.status as Status] ?? before.status} → ${STATUS_LABEL[after.status as Status] ?? after.status}`
+                : h.action === "STATUS" ? moved
+                : h.action === "REVISION" ? `Revision ${String(after.revision)}${moved ? ` · ${moved}` : ""}`
                 : h.action === "UPLOAD" ? "Uploaded a file" : "Edited";
               return (
                 <li key={h.id} className="border-t border-[#f0ece6] pt-2 text-[13px] first:border-0 first:pt-0">
                   <div className="font-semibold">{title}</div>
-                  {changes.map(([k, label]) => <div key={k} className="font-mono text-[12px] text-gray-600">{label}: {String(before[k] ?? "—")} → {String(after[k] ?? "—")}</div>)}
+                  {changes.map(([k, label]) => <div key={k} className="font-mono text-[12px] text-gray-600">{label}: {h.action === "STATUS" ? show(after[k]) : `${show(before[k])} → ${show(after[k])}`}</div>)}
                   {meta.file && <div className="text-xs text-gray-600">File: {meta.file}</div>}
                   {meta.note && <div className="mt-1 rounded-md bg-[#fcfbf9] px-2 py-1 whitespace-pre-wrap">{meta.note}</div>}
                   <div className="text-xs text-gray-500">{h.actor?.name ?? "System"} · {when(h.createdAt)}</div>

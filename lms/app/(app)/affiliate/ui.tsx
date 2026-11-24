@@ -29,13 +29,15 @@ export function totals(rows: { netAmount: { toString(): string }; currency: stri
 
 type CampaignOption = Campaign & { advertiser: Advertiser };
 
-export function ValidationForm({ side, action, campaigns, publishers, v, month }: {
+export function ValidationForm({ side, action, campaigns, publishers, v, month, revision }: {
   side: Side;
   action: (s: FormState, f: FormData) => Promise<FormState>;
   campaigns: CampaignOption[];
   publishers: Publisher[];
   v?: Validation;
   month: string;
+  /** Set when saving counts as a revision of an approved record: what happens after. */
+  revision?: string;
 }) {
   const delivery = side === "DELIVERY";
   // Group campaigns by advertiser so "client, then campaign" is one pick.
@@ -44,7 +46,14 @@ export function ValidationForm({ side, action, campaigns, publishers, v, month }
   const num = (x: { toString(): string } | null | undefined) => (x == null ? "" : Number(x));
 
   return (
-    <ActionForm action={action} submit={v ? "Save changes" : "Save as draft"} submitClass="btn btn-accent">
+    <ActionForm action={action} submit={revision ? "Save revision" : v ? "Save changes" : "Save as draft"} submitClass="btn btn-accent">
+      {revision && (
+        <div className="rounded-[10px] border border-brand-200 bg-brand-50 p-3">
+          <label className="label" htmlFor="reason">Reason for revision (required)</label>
+          <textarea className="input" id="reason" name="reason" rows={2} maxLength={2000} required />
+          <p className="mt-1 text-xs text-gray-600">{revision} The old and new figures are kept in the history.</p>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="label" htmlFor="campaignId">Client and campaign</label>

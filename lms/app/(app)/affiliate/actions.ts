@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
 import { actorFor, affiliateAccess, canManageDirectory, canViewSide, nextValidationNumber, type AffiliateAccess } from "@/lib/affiliate";
-import { allowedMoves, canEditRecord, CURRENCIES, fileType, MAX_FILE_BYTES, NEEDS_NOTE, SIDES, STATUS_LABEL, type Side, type Status } from "@/lib/affiliate-rules";
+import { allowedMoves, canEditRecord, CURRENCIES, fileType, MAX_FILE_BYTES, NEEDS_NOTE, needsRevision, REVISABLE, REVISION_TO, SIDES, STATUS_LABEL, type Side, type Status } from "@/lib/affiliate-rules";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { fromIso, todayIso } from "@/lib/leave";
@@ -90,6 +90,15 @@ export async function saveValidation(side: Side, id: number | null, _: FormState
   const file = await readFile(form);
   if (typeof file === "string") return { error: file };
 
+  // Past approval, a change is a revision: it needs a reason and (unless payment is under way) goes back for review.
+  const revising = !!before && needsRevision(side, before.status);
+  const reason = String(form.get("reason") ?? "").trim().slice(0, 2000);
+  if (revising && !reason) return { error: "Give a reason for the revision." };
+  const reopen = revising && REVISABLE[side].includes(before!.status);
+  const revision = revising
+    ? { revision: before!.revision + 1, ...(reopen && { status: REVISION_TO[side], approvedAmount: null }) }
+    : {};
+
   const data = {
     month: p.month, campaignId: campaign.id, geo: geo.toUpperCase(), platform: p.platform ?? campaign.platform, offerModel,
     totalConversions: p.totalConversions, approvedConversions: p.approvedConversions, rejectedConversions: rejected,
@@ -101,11 +110,19 @@ export async function saveValidation(side: Side, id: number | null, _: FormState
 
   let savedId = id;
   if (id) {
-    await db.$transaction(async (tx) => {
-      await tx.validation.update({ where: { id }, data });
+    const saved = await db.$transaction(async (tx) => {
+      // Guard on status so an edit can't race a Finance move (the edit rules depend on the status).
+      const { count } = await tx.validation.updateMany({ where: { id, status: before!.status }, data: { ...data, ...revision } });
+      if (!count) return false;
       if (file) await tx.validationFile.create({ data: { ...file, validationId: id, uploadedById: a.user.id } });
-      await writeAudit(tx, { actorId: a.user.id, action: "UPDATE", entityType: "VALIDATION", entityId: id, before, after: data, metadata: file ? { file: file.fileName } : undefined });
+      const metadata = { ...(file && { file: file.fileName }), ...(revising && { note: reason }) };
+      await writeAudit(tx, {
+        actorId: a.user.id, action: revising ? "REVISION" : "UPDATE", entityType: "VALIDATION", entityId: id,
+        before, after: { ...data, ...revision }, metadata: Object.keys(metadata).length ? metadata : undefined,
+      });
+      return true;
     });
+    if (!saved) return { error: "Someone changed this record's status while you were editing. Refresh and try again." };
   } else {
     // Numbers come from the latest one; retry if two people save at the same moment.
     for (let attempt = 0; ; attempt++) {
@@ -126,7 +143,7 @@ export async function saveValidation(side: Side, id: number | null, _: FormState
   revalidatePath(`/affiliate/${SIDES[side].slug}`);
   if (!id) redirect(`/affiliate/${SIDES[side].slug}/${savedId}`);
   revalidatePath(`/affiliate/${SIDES[side].slug}/${id}`);
-  return { ok: "Saved." };
+  return { ok: revising ? (reopen ? `Revision ${before!.revision + 1} saved and sent back for review.` : `Revision ${before!.revision + 1} saved.`) : "Saved." };
 }
 
 export async function moveValidation(id: number, _: FormState, form: FormData): Promise<FormState> {
@@ -140,17 +157,42 @@ export async function moveValidation(id: number, _: FormState, form: FormData): 
   if (NEEDS_NOTE.includes(to) && !note) return { error: `Add a note explaining why it's ${STATUS_LABEL[to].toLowerCase()}.` };
 
   const today = await todayIso();
+  // Extra details some moves record.
+  const extra: { approvedAmount?: number | null; invoiceNumber?: string; invoiceDate?: Date | null; paidDate?: Date; paymentRef?: string | null } = {};
+  if (to === "PARTIALLY_APPROVED") {
+    const n = Number(form.get("approvedAmount"));
+    if (!form.get("approvedAmount") || !(n > 0) || n >= Number(v.netAmount))
+      return { error: `Enter the approved part: more than 0 and less than the net ${v.netAmount.toString()} ${v.currency}.` };
+    extra.approvedAmount = Math.round(n * 100) / 100;
+  }
+  if (to === "APPROVED" && v.side === "SALES") extra.approvedAmount = null; // full approval counts the whole net amount
+  if (to === "INVOICE_RECEIVED") {
+    const invoiceNumber = String(form.get("invoiceNumber") ?? "").trim().slice(0, 60) || v.invoiceNumber;
+    if (!invoiceNumber) return { error: "Enter the publisher's invoice number." };
+    const d = String(form.get("invoiceDate") ?? "");
+    if (d && (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d > today)) return { error: "The invoice date can't be in the future." };
+    Object.assign(extra, { invoiceNumber, ...(d && { invoiceDate: fromIso(d) }) });
+  }
+  if (to === "PAID") {
+    const d = String(form.get("paidDate") ?? "") || today;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d > today) return { error: "The payment date can't be in the future." };
+    Object.assign(extra, { paidDate: fromIso(d), paymentRef: String(form.get("paymentRef") ?? "").trim().slice(0, 100) || null });
+  }
+
   const data = {
     status: to,
+    ...extra,
     ...(to === "SUBMITTED" && { submittedAt: new Date() }),
     ...(to === "SENT_TO_PUBLISHER" && { sentDate: fromIso(today) }),
   };
-  await db.$transaction(async (tx) => {
+  const moved = await db.$transaction(async (tx) => {
     // Only move if nobody else moved it first.
     const { count } = await tx.validation.updateMany({ where: { id, status: v.status }, data });
-    if (!count) throw new Error("stale");
-    await writeAudit(tx, { actorId: a.user.id, action: "STATUS", entityType: "VALIDATION", entityId: id, before: { status: v.status }, after: { status: to }, metadata: note ? { note } : undefined });
-  }).catch((e) => { if (e instanceof Error && e.message === "stale") return; throw e; });
+    if (!count) return false;
+    await writeAudit(tx, { actorId: a.user.id, action: "STATUS", entityType: "VALIDATION", entityId: id, before: { status: v.status }, after: { status: to, ...extra }, metadata: note ? { note } : undefined });
+    return true;
+  });
+  if (!moved) return { error: "Someone else changed this record first. Refresh the page." };
   revalidatePath(`/affiliate/${SIDES[v.side].slug}`);
   revalidatePath(`/affiliate/${SIDES[v.side].slug}/${id}`);
   return { ok: `Moved to ${STATUS_LABEL[to]}.` };

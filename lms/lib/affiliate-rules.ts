@@ -76,10 +76,98 @@ export const EDITABLE: Record<Side, Status[]> = {
   SALES: ["DRAFT", "SUBMITTED", "DISPUTED"],
   DELIVERY: ["DRAFT", "SUBMITTED", "DISPUTED", "REVISED"],
 };
-export const canEditRecord = (side: Side, status: Status, a: Actor) => a.admin || (a.team && EDITABLE[side].includes(status));
+/**
+ * Past approval, figures change only through a revision: a written reason, the revision number goes up,
+ * and the record goes back for review. These are the statuses the team may revise from.
+ * Once payment is under way (Payment pending, Paid, Closed) only an admin can revise, and the status stays.
+ */
+export const REVISABLE: Record<Side, Status[]> = {
+  SALES: ["APPROVED", "PARTIALLY_APPROVED"],
+  DELIVERY: ["READY_TO_SEND", "SENT_TO_PUBLISHER", "ACKNOWLEDGED", "APPROVED", "INVOICE_RECEIVED"],
+};
+export const REVISION_TO: Record<Side, Status> = { SALES: "SUBMITTED", DELIVERY: "REVISED" };
+/** Any status where an edit counts as a revision (needs a reason). */
+export const needsRevision = (side: Side, status: Status) => !EDITABLE[side].includes(status) && status !== "PENDING_FINANCE_REVIEW" && status !== "UNDER_REVIEW";
+
+export const canEditRecord = (side: Side, status: Status, a: Actor) =>
+  a.admin || (a.team && (EDITABLE[side].includes(status) || REVISABLE[side].includes(status)));
 
 /** Statuses that need a written reason. */
 export const NEEDS_NOTE: Status[] = ["DISPUTED", "PARTIALLY_APPROVED"];
+
+// ---------- Money: what counts, reconciliation ----------
+
+/** Where a record stands for the money figures. Only "approved" counts as validated revenue or cost. */
+export type Bucket = "draft" | "pending" | "disputed" | "approved";
+const APPROVED_SET: Record<Side, Status[]> = {
+  SALES: ["APPROVED", "PARTIALLY_APPROVED", "CLOSED"],
+  DELIVERY: ["APPROVED", "INVOICE_RECEIVED", "PAYMENT_PENDING", "PAID", "CLOSED"],
+};
+export const bucket = (side: Side, s: Status): Bucket =>
+  s === "DRAFT" ? "draft" : s === "DISPUTED" ? "disputed" : APPROVED_SET[side].includes(s) ? "approved" : "pending";
+
+/** Publisher payment state (Delivery only): due = approved and not yet paid. */
+export type Payment = "not_due" | "due" | "paid";
+export const PAYMENT_LABEL: Record<Payment, string> = { not_due: "Not yet due", due: "Due", paid: "Paid" };
+export const payment = (s: Status): Payment =>
+  s === "PAID" || s === "CLOSED" ? "paid" : APPROVED_SET.DELIVERY.includes(s) ? "due" : "not_due";
+export const PAYMENT_STATUSES: Record<Payment, Status[]> = {
+  paid: ["PAID", "CLOSED"],
+  due: ["APPROVED", "INVOICE_RECEIVED", "PAYMENT_PENDING"],
+  not_due: STATUSES.DELIVERY.filter((s) => !APPROVED_SET.DELIVERY.includes(s)),
+};
+
+export type MoneyRow = {
+  side: Side; status: Status; campaignId: number; month: string; geo: string; currency: string;
+  publisherId: number | null; netAmount: number; approvedAmount: number | null; approvedConversions: number;
+};
+/** The amount a record contributes: the approved part of a partial approval, else the net amount. */
+export const counted = (r: Pick<MoneyRow, "side" | "status" | "netAmount" | "approvedAmount">) =>
+  bucket(r.side, r.status) === "approved" && r.approvedAmount != null ? r.approvedAmount : r.netAmount;
+
+const zero = (): Record<Bucket, number> => ({ draft: 0, pending: 0, disputed: 0, approved: 0 });
+export type RecRow = {
+  campaignId: number; month: string; geo: string; currency: string;
+  revenue: Record<Bucket, number>; cost: Record<Bucket, number>;
+  clientConv: number; publisherConv: number;
+  /** Approved and in-progress cost per publisher. */
+  publishers: Map<number, { approved: number; open: number }>;
+  margin: number; marginPct: number | null;
+};
+
+/**
+ * Campaign-level reconciliation: rows matched by campaign, month, GEO and currency (never across currencies).
+ * Margin uses approved figures only; conversions are shown side by side, never forced to match.
+ */
+export function reconcile(rows: MoneyRow[]): RecRow[] {
+  const by = new Map<string, RecRow>();
+  for (const r of rows) {
+    const key = `${r.campaignId}|${r.month}|${r.geo}|${r.currency}`;
+    let g = by.get(key);
+    if (!g) by.set(key, (g = { campaignId: r.campaignId, month: r.month, geo: r.geo, currency: r.currency, revenue: zero(), cost: zero(), clientConv: 0, publisherConv: 0, publishers: new Map(), margin: 0, marginPct: null }));
+    const b = bucket(r.side, r.status);
+    const amt = counted(r);
+    if (r.side === "SALES") {
+      g.revenue[b] += amt;
+      if (b === "approved") g.clientConv += r.approvedConversions;
+    } else {
+      g.cost[b] += amt;
+      if (b === "approved") g.publisherConv += r.approvedConversions;
+      if (r.publisherId != null && b !== "draft") {
+        const p = g.publishers.get(r.publisherId) ?? { approved: 0, open: 0 };
+        if (b === "approved") p.approved += amt; else p.open += amt;
+        g.publishers.set(r.publisherId, p);
+      }
+    }
+  }
+  const cents = (n: number) => Math.round(n * 100) / 100;
+  return [...by.values()].map((g) => {
+    for (const k of Object.keys(g.revenue) as Bucket[]) { g.revenue[k] = cents(g.revenue[k]); g.cost[k] = cents(g.cost[k]); }
+    g.margin = cents(g.revenue.approved - g.cost.approved);
+    g.marginPct = g.revenue.approved ? Math.round((g.margin / g.revenue.approved) * 1000) / 10 : null;
+    return g;
+  });
+}
 
 // ---------- Uploaded files ----------
 export const MAX_FILE_BYTES = 10 * 1024 * 1024; // keep in sync with serverActions.bodySizeLimit in next.config.ts

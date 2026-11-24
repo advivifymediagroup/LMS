@@ -48,7 +48,7 @@ export default async function ValidationsPage({ params, searchParams }: PageProp
     <div className="flex flex-col gap-6">
       <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Records" value={rows.length} note={month ? `For ${month}` : "All months"} />
-        <StatCard label={side === "SALES" ? "Approved revenue" : "Approved payouts"} value={totals(done)} note={`${done.length} approved or later`} />
+        <StatCard label={side === "SALES" ? "Approved revenue" : "Approved payouts"} value={totals(done.map((r) => ({ currency: r.currency, netAmount: r.approvedAmount ?? r.netAmount })))} note={`${done.length} approved or later`} />
         <StatCard label="In progress" value={totals(open)} note={`${open.length} awaiting a next step`} />
         <StatCard label="Disputed" value={disputed.length} note="Need resolving" warn={disputed.length > 0} href={`${base}?status=DISPUTED`} />
       </div>

@@ -412,6 +412,10 @@ model Validation {
   invoiceNumber       String? // DELIVERY only
   invoiceDate         DateTime?        @db.Date
   sentDate            DateTime?        @db.Date
+  approvedAmount      Decimal?         @db.Decimal(14, 2) // SALES: what Finance approved (the part, if partial)
+  revision            Int              @default(0) // bumped each time an approved record is revised
+  paidDate            DateTime?        @db.Date // DELIVERY: when the publisher was paid
+  paymentRef          String? // DELIVERY: UTR / transaction reference
   remarks             String?
   status              ValidationStatus @default(DRAFT)
   submittedAt         DateTime?

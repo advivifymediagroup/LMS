@@ -38,6 +38,7 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   // Affiliate Operations: Sales and Delivery see their own side; Finance, Leadership and admins see both.
   const seesAll = finance || dept?.name === "Leadership";
   const affiliate: NavItem[] = [
+    ...(seesAll ? [{ href: "/affiliate/overview", label: "Overview & margins" }] : []),
     ...(seesAll || dept?.name === "Sales" ? [{ href: "/affiliate/sales", label: "Sales validations" }] : []),
     ...(seesAll || dept?.name === "Delivery" ? [{ href: "/affiliate/delivery", label: "Delivery validations" }] : []),
   ];
