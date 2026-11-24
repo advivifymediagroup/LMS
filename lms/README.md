@@ -16,6 +16,16 @@ npm run dev                 # http://localhost:3000
 npm test                    # unit tests (day count, CSV)
 ```
 
+## Google sign-in
+
+Google sign-in is available to active LMS users whose Google account has a verified email matching their LMS email. It does not create accounts. If an account still requires a password change, the existing password-change step remains required.
+
+1. In Google Cloud Console, configure the OAuth consent screen & create an OAuth client ID for a **Web application**.
+2. Add this exact authorized redirect URI: `${APP_URL}/login/google/callback` (for local development, this is usually `http://localhost:3000/login/google/callback`).
+3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` and in your deployment's server-side environment. `APP_URL` must be the app's public origin without a trailing slash or path. Restart the app after setting them.
+
+The Google button appears only when all required settings are present. The OAuth flow requests only the `openid` & `email` scopes; Google tokens are not stored.
+
 Seed logins (dev only): `ADM001`, `LEAD001`, `LEAD002`, `EMP001`–`EMP005`, or their `@example.com` emails.
 Password for all: `Welcome@123`. `EMP005` joined 2026-09-15, so they're on probation (paid leave blocked).
 
@@ -30,11 +40,11 @@ The app is styled to the "Advivify Portal" design (Manrope + IBM Plex Mono, warm
 - Analytics (`/analytics`, leads and admins): tasks completed and on-time rate, leave days by team this month
 - Users & roles: search, role filter, CSV export
 
-Not in this pass: courses, global search, notifications, single sign-on, two-level (HR) leave approval.
+Not in this pass: courses, global search, notifications, two-level (HR) leave approval.
 
 ## What's built (Phases 0–3)
 
-- Login with Employee ID or email; forced password change for new/reset users
+- Login with Employee ID or email and password, or Google for existing active users; forced password change for new/reset users
 - Roles: Admin, Team Lead, Employee. Every page and server action checks the role (`requireUser` in `lib/auth.ts`)
 - Admin: users (create/edit/deactivate, reset password), departments, CSV import with opening balances, manual balance adjustments
 - Apply leave with live day count and balance preview; approvals for leads (direct reports) and admins (everyone); cancel with refund
