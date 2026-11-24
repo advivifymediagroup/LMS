@@ -9,6 +9,7 @@ import { writeAudit } from "@/lib/audit";
 import { db } from "@/lib/db";
 import { fromIso } from "@/lib/leave";
 import { canEditTask, canMoveTask } from "@/lib/task-rules";
+import { cleanTaskFields } from "@/lib/team-config";
 import type { FormState } from "../admin/actions";
 
 const STATUSES = ["TODO", "DOING", "REVIEW", "DONE"] as const;
@@ -37,6 +38,9 @@ async function checkScope(me: Awaited<ReturnType<typeof requireUser>>, departmen
   return null;
 }
 
+const teamFields = async (departmentId: number, form: FormData) =>
+  cleanTaskFields((await db.department.findUnique({ where: { id: departmentId } }))?.name, Object.fromEntries(form));
+
 export async function createTask(_: FormState, form: FormData): Promise<FormState> {
   const me = await requireUser();
   const parsed = TaskInput.safeParse(Object.fromEntries(form));
@@ -44,9 +48,10 @@ export async function createTask(_: FormState, form: FormData): Promise<FormStat
   const { status, ...data } = parsed.data;
   const problem = await checkScope(me, data.departmentId, data.assigneeId);
   if (problem) return { error: problem };
+  const fields = await teamFields(data.departmentId, form);
 
   const task = await db.$transaction(async (tx) => {
-    const t = await tx.task.create({ data: { ...data, status: status ?? "TODO", createdById: me.id, completedAt: status === "DONE" ? new Date() : null } });
+    const t = await tx.task.create({ data: { ...data, fields, status: status ?? "TODO", createdById: me.id, completedAt: status === "DONE" ? new Date() : null } });
     await writeAudit(tx, { actorId: me.id, targetUserId: t.assigneeId, action: "CREATE", entityType: "TASK", entityId: t.id, after: t });
     return t;
   });
@@ -64,9 +69,10 @@ export async function updateTask(id: number, _: FormState, form: FormData): Prom
   const { status = before.status, ...data } = parsed.data;
   const problem = await checkScope(me, data.departmentId, data.assigneeId);
   if (problem) return { error: problem };
+  const fields = await teamFields(data.departmentId, form);
 
   await db.$transaction(async (tx) => {
-    const after = await tx.task.update({ where: { id }, data: { ...data, status, completedAt: completedAt(before.status, status, before.completedAt) } });
+    const after = await tx.task.update({ where: { id }, data: { ...data, fields, status, completedAt: completedAt(before.status, status, before.completedAt) } });
     await writeAudit(tx, { actorId: me.id, targetUserId: after.assigneeId, action: "UPDATE", entityType: "TASK", entityId: id, before, after });
   });
   revalidatePath("/", "layout");

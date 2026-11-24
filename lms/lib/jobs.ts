@@ -4,6 +4,7 @@ import type { LeaveLedger } from "@prisma/client";
 import { db } from "./db";
 import { getSetting, probationEnd, todayIso } from "./leave";
 import { firstCreditMonth, monthRange, proRatedQuota, toIso } from "./leave-days";
+import { runMilestones } from "./milestones";
 import { sendPendingReminders } from "./notify";
 
 type NewRow = Pick<LeaveLedger, "userId" | "leaveTypeId" | "kind" | "period" | "note"> & { days: number };
@@ -112,6 +113,7 @@ export async function runAllJobs() {
     ["yearlyCredits", runYearlyCredits],
     ["monthlyCredits", runMonthlyCredits],
     ["remindersSent", runDailyReminder],
+    ["milestoneTasks", runMilestones],
   ] as const) {
     try {
       result[name] = await job(today);

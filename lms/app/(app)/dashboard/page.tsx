@@ -50,7 +50,7 @@ export default async function DashboardPage({ searchParams }: PageProps<"/dashbo
   const onbDone = onboarding.filter((t) => t.status === "DONE").length;
   const onbPct = onboarding.length ? Math.round((onbDone / onboarding.length) * 100) : 0;
 
-  const teams = isApprover ? await teamsOverview(today) : [];
+  const teams = isApprover ? await teamsOverview(today, user.role === "ADMIN" ? undefined : user.departmentId) : [];
   const myTeam = teams.find((t) => t.id === user.departmentId);
 
   let sub: string, stats: React.ComponentProps<typeof StatCard>[], cta: [string, string][];

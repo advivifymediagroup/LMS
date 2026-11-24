@@ -29,10 +29,12 @@ async function AppShell({ children }: { children: React.ReactNode }) {
       ? db.leaveRequest.count({ where: { status: "PENDING", ...(user.role === "ADMIN" ? { userId: { not: user.id } } : { user: { managerId: user.id } }) } })
       : 0,
     db.task.count({ where: { assigneeId: user.id, status: { not: "DONE" } } }),
-    db.department.findMany({ orderBy: { name: "asc" }, include: { _count: { select: { tasks: { where: { status: { not: "DONE" } } } } } } }),
+    db.department.findMany({ where: user.role === "ADMIN" ? {} : { id: user.departmentId ?? -1 }, orderBy: { name: "asc" }, include: { _count: { select: { tasks: { where: { status: { not: "DONE" } } } } } } }),
     user.departmentId ? db.department.findUnique({ where: { id: user.departmentId } }) : null,
     probationEnd(user),
   ]);
+  const finance = user.role === "ADMIN" || dept?.name === "Finance";
+  const financeTeamId = user.role === "ADMIN" ? (await db.department.findUnique({ where: { name: "Finance" } }))?.id : dept?.id;
   const roleLabel = user.role === "EMPLOYEE" && today < probation ? "New hire" : ROLE_LABEL[user.role];
 
   const nav: NavItem[] = [
@@ -41,6 +43,7 @@ async function AppShell({ children }: { children: React.ReactNode }) {
     { href: "/tasks", label: "My tasks", count: openTasks },
     { href: "/tasks/board", label: "Task board" },
     { href: "/calendar", label: "Calendar" },
+    { href: "/reports", label: "Monthly reports" },
     ...(approver ? [{ href: "/analytics", label: "Analytics" }] : []),
     { href: "/documents", label: "Policies" },
   ];
@@ -57,8 +60,8 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   const heading = "hidden px-2.5 pb-2 font-mono text-[10.5px] font-medium tracking-[.12em] text-[#8d9096] uppercase md:block";
 
   return (
-    <div className="flex min-h-screen flex-col bg-paper md:flex-row">
-      <aside className="flex w-full flex-none flex-col gap-5 bg-char px-3.5 py-4 text-paper md:sticky md:top-0 md:h-screen md:w-[248px] md:gap-7 md:overflow-y-auto md:py-[22px]">
+    <div className="flex min-h-screen flex-col bg-paper md:flex-row print:bg-white">
+      <aside className="print:hidden flex w-full flex-none flex-col gap-5 bg-char px-3.5 py-4 text-paper md:sticky md:top-0 md:h-screen md:w-[248px] md:gap-7 md:overflow-y-auto md:py-[22px]">
         <Link href="/dashboard" className="px-2">
           <Logo size={30} dark />
         </Link>
@@ -66,6 +69,12 @@ async function AppShell({ children }: { children: React.ReactNode }) {
           <div className={heading}>Workspace</div>
           <SideNav items={nav} />
         </nav>
+        {finance && (
+          <nav className="flex gap-0.5 overflow-x-auto md:flex-col md:overflow-visible">
+            <div className={heading}>Finance</div>
+            <SideNav items={[{ href: "/finance", label: "Invoices" }, ...(financeTeamId ? [{ href: `/tasks/board?team=${financeTeamId}`, label: "Finance tasks" }] : [])]} />
+          </nav>
+        )}
         {user.role === "ADMIN" && (
           <nav className="flex gap-0.5 overflow-x-auto md:flex-col md:overflow-visible">
             <div className={heading}>Admin</div>
@@ -94,14 +103,14 @@ async function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-10 flex h-[72px] flex-none items-center gap-4 border-b border-[#e8e4de] bg-paper px-4 md:px-8">
+        <header className="print:hidden sticky top-0 z-10 flex h-[72px] flex-none items-center gap-4 border-b border-[#e8e4de] bg-paper px-4 md:px-8">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <div className="eyebrow">Advivify · {roleLabel}</div>
             <PageTitle />
           </div>
           <Link href="/leave#apply" className="btn btn-accent btn-sm h-10">Request leave</Link>
         </header>
-        <div className="w-full max-w-[1440px] px-4 pt-7 pb-12 md:px-8">{children}</div>
+        <div className="w-full max-w-[1440px] px-4 pt-7 pb-12 md:px-8 print:p-0">{children}</div>
       </main>
     </div>
   );

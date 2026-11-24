@@ -9,6 +9,7 @@ import { requireUser } from "@/lib/auth";
 import { fromIso, getSetting, todayIso } from "@/lib/leave";
 import { runAllJobs, runDailyReminder } from "@/lib/jobs";
 import { sendMail, type SmtpSettings } from "@/lib/mail";
+import { testEmail } from "@/lib/notify";
 import type { FormState } from "./actions";
 import { writeAudit } from "@/lib/audit";
 
@@ -145,7 +146,7 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
 export async function sendTestEmail(_: FormState): Promise<FormState> {
   const me = await requireUser(["ADMIN"]);
   try {
-    await sendMail({ to: [me.email], subject: "Leave Management test email", text: "SMTP settings work." });
+    await sendMail(testEmail(me.email));
     return { ok: `Test email sent to ${me.email}.` };
   } catch (e) {
     return { error: `Sending failed: ${e instanceof Error ? e.message : String(e)}` };

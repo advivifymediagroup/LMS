@@ -3,13 +3,14 @@ import { fromIso } from "./leave";
 import { addDays, addMonths } from "./leave-days";
 import { usageReport } from "./reports";
 
-/** Per-team numbers for the dashboard "Teams overview" and the analytics page. */
-export async function teamsOverview(today: string) {
+/** Per-team numbers for the dashboard "Teams overview" and the analytics page. Pass a team id to limit it to that team (leads). */
+export async function teamsOverview(today: string, onlyTeam?: number | null) {
   const month = today.slice(0, 7);
   const monthEnd = addDays(addMonths(`${month}-01`, 1), -1);
   const day = fromIso(today);
   const [departments, open, overdue, done30, outToday, usage] = await Promise.all([
     db.department.findMany({
+      where: onlyTeam === undefined ? {} : { id: onlyTeam ?? -1 },
       orderBy: { name: "asc" },
       include: { users: { where: { isActive: true }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } } },
     }),

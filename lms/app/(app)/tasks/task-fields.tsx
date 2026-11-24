@@ -1,10 +1,15 @@
+"use client";
+
+import { useState } from "react";
 import type { Task } from "@prisma/client";
 import { toIso } from "@/lib/leave-days";
-import { TASK_COLUMNS } from "../ui";
+import { TASK_FIELDS } from "@/lib/team-config";
+
+const STATUSES = [["TODO", "To do"], ["DOING", "In progress"], ["REVIEW", "In review"], ["DONE", "Done"]] as const;
 
 type Team = { id: number; name: string; users: { id: number; name: string }[] };
 
-/** Fields shared by the new-task and edit-task forms. */
+/** Fields shared by the new-task and edit-task forms. The extra fields change with the chosen team. */
 export function TaskFields({ teams, task, defaultTeam, defaultAssignee, canAssignOthers }: {
   teams: Team[];
   task?: Task;
@@ -12,6 +17,9 @@ export function TaskFields({ teams, task, defaultTeam, defaultAssignee, canAssig
   defaultAssignee?: number;
   canAssignOthers: boolean;
 }) {
+  const [teamId, setTeamId] = useState(String(task?.departmentId ?? defaultTeam ?? ""));
+  const extra = TASK_FIELDS[teams.find((t) => String(t.id) === teamId)?.name ?? ""] ?? [];
+  const values = (task?.fields ?? {}) as Record<string, string>;
   return (
     <>
       <div>
@@ -25,7 +33,7 @@ export function TaskFields({ teams, task, defaultTeam, defaultAssignee, canAssig
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="label" htmlFor="departmentId">Team</label>
-          <select className="input" id="departmentId" name="departmentId" required defaultValue={task?.departmentId ?? defaultTeam ?? ""}>
+          <select className="input" id="departmentId" name="departmentId" required value={teamId} onChange={(e) => setTeamId(e.target.value)}>
             <option value="" disabled>Choose…</option>
             {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -57,7 +65,7 @@ export function TaskFields({ teams, task, defaultTeam, defaultAssignee, canAssig
         <div>
           <label className="label" htmlFor="status">Status</label>
           <select className="input" id="status" name="status" defaultValue={task?.status ?? "TODO"}>
-            {TASK_COLUMNS.map((c) => <option key={c.status} value={c.status}>{c.name}</option>)}
+            {STATUSES.map(([v, name]) => <option key={v} value={v}>{name}</option>)}
           </select>
         </div>
         <div>
@@ -68,6 +76,24 @@ export function TaskFields({ teams, task, defaultTeam, defaultAssignee, canAssig
           </datalist>
         </div>
       </div>
+      {extra.length > 0 && (
+        <fieldset className="grid gap-3 rounded-[10px] border border-gray-200 p-3.5 sm:grid-cols-2">
+          <legend className="eyebrow px-1">{teams.find((t) => String(t.id) === teamId)?.name} details</legend>
+          {extra.map((fd) => (
+            <div key={fd.key}>
+              <label className="label" htmlFor={`f_${fd.key}`}>{fd.label}</label>
+              {fd.type === "select" ? (
+                <select className="input" id={`f_${fd.key}`} name={`f_${fd.key}`} defaultValue={values[fd.key] ?? ""}>
+                  <option value="">—</option>
+                  {fd.options.map((o) => <option key={o}>{o}</option>)}
+                </select>
+              ) : (
+                <input className="input" id={`f_${fd.key}`} name={`f_${fd.key}`} type={fd.type} step={fd.type === "number" ? "any" : undefined} defaultValue={values[fd.key] ?? ""} />
+              )}
+            </div>
+          ))}
+        </fieldset>
+      )}
     </>
   );
 }

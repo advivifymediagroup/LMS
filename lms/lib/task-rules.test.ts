@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { canEditTask, canMoveTask, dueGroup, dueLabel, initials } from "./task-rules.ts";
+import { canEditTask, canMoveTask, canViewTask, dueGroup, dueLabel, initials } from "./task-rules.ts";
 
 test("dueGroup buckets by due date", () => {
   const today = "2026-11-12";
@@ -27,4 +27,13 @@ test("task permissions", () => {
   assert.equal(canEditTask({ id: 4, role: "LEAD", departmentId: 10 }, task), true, "team lead edits");
   assert.equal(canEditTask({ id: 5, role: "LEAD", departmentId: 11 }, task), false, "other lead cannot");
   assert.equal(canEditTask({ id: 6, role: "ADMIN", departmentId: null }, task), true);
+});
+
+test("task visibility is per team", () => {
+  const t = { createdById: 9, assigneeId: null, departmentId: 1 };
+  assert.equal(canViewTask({ id: 1, role: "ADMIN", departmentId: 2 }, t), true);
+  assert.equal(canViewTask({ id: 2, role: "EMPLOYEE", departmentId: 1 }, t), true);
+  assert.equal(canViewTask({ id: 3, role: "EMPLOYEE", departmentId: 2 }, t), false);
+  assert.equal(canViewTask({ id: 4, role: "LEAD", departmentId: 2 }, t), false);
+  assert.equal(canViewTask({ id: 5, role: "EMPLOYEE", departmentId: null }, { ...t, assigneeId: 5 }), true);
 });

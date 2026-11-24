@@ -56,7 +56,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/user
                     </div>
                   </td>
                   <td className="text-gray-700">{u.department?.name ?? "—"}</td>
-                  <td><span className="pill border border-gray-300 text-char">{ROLE_LABEL[u.role]}</span></td>
+                  <td><span className="pill border border-gray-300 text-char">{ROLE_LABEL[u.role]}</span>{u.employmentType === "INTERN" && <span className="pill ml-1 bg-brand-50 text-brand-700" title={u.internshipEndDate ? `Internship ends ${u.internshipEndDate.toISOString().slice(0, 10)}` : undefined}>Intern</span>}</td>
                   <td className="text-[13px] text-gray-700">{u.manager?.name ?? "Any admin"}</td>
                   <td>
                     <span className={`flex items-center gap-[7px] text-[13px] font-semibold ${status === "Active" ? "" : status === "Inactive" ? "text-gray-500" : "text-brand-700"}`}>

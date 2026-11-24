@@ -7,14 +7,16 @@ import { pct, teamsOverview } from "@/lib/portal";
 import { StatCard } from "../ui";
 
 export default async function AnalyticsPage() {
-  await requireUser(["LEAD", "ADMIN"]);
+  const me = await requireUser(["LEAD", "ADMIN"]);
+  const admin = me.role === "ADMIN";
+  const scope = admin ? {} : { departmentId: me.departmentId ?? -1 }; // leads only see their own team
   const today = await todayIso();
   const d30 = fromIso(addDays(today, -30)), d60 = fromIso(addDays(today, -60));
   const [teams, done30, donePrev, people] = await Promise.all([
-    teamsOverview(today),
-    db.task.findMany({ where: { status: "DONE", completedAt: { gte: d30 } }, select: { dueDate: true, completedAt: true } }),
-    db.task.count({ where: { status: "DONE", completedAt: { gte: d60, lt: d30 } } }),
-    db.user.count({ where: { isActive: true } }),
+    teamsOverview(today, admin ? undefined : me.departmentId),
+    db.task.findMany({ where: { ...scope, status: "DONE", completedAt: { gte: d30 } }, select: { dueDate: true, completedAt: true } }),
+    db.task.count({ where: { ...scope, status: "DONE", completedAt: { gte: d60, lt: d30 } } }),
+    db.user.count({ where: { isActive: true, ...scope } }),
   ]);
   const withDue = done30.filter((t) => t.dueDate);
   // On time = finished on or before its due date (compared as calendar days).
