@@ -38,7 +38,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
   const trendTo = month || (year ? `${year}-12` : (await todayIso()).slice(0, 7));
   const trendFrom = shiftMonth(trendTo, -11);
 
-  const [rows, advertisers, campaigns, publishers, owners, trendRows] = await Promise.all([
+  const [rows, advertisers, campaigns, publishers, owners, trendRows, openDelivery] = await Promise.all([
     // ponytail: everything for the period in memory; fine for thousands of rows a month, aggregate in SQL beyond that.
     db.validation.findMany({ where, include: { campaign: { include: { advertiser: true } }, publisher: true, createdBy: true }, take: 20000 }),
     db.advertiser.findMany({ orderBy: { name: "asc" } }),
@@ -49,6 +49,13 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
       where: { AND: [{ month: { gte: trendFrom, lte: trendTo } }, ...filters] },
       select: { side: true, status: true, campaignId: true, month: true, geo: true, currency: true, publisherId: true, netAmount: true, approvedAmount: true, approvedConversions: true },
       take: 50000,
+    }),
+    // Unpaid publisher records from any month: money owed doesn't stop being owed when the month ends.
+    db.validation.findMany({
+      where: { AND: [{ side: "DELIVERY", status: { notIn: ["DRAFT", "PAID", "CLOSED"] } }, ...filters] },
+      include: { campaign: { include: { advertiser: true } }, publisher: true, createdBy: true },
+      orderBy: [{ month: "asc" }, { number: "asc" }],
+      take: 20000,
     }),
   ]);
 
@@ -72,15 +79,20 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
   const campaignById = new Map(campaigns.map((c) => [c.id, c]));
   const publisherById = new Map(publishers.map((p) => [p.id, p]));
 
-  // Owed to each publisher (approved, not yet paid) and paid, per currency.
+  // Owed to each publisher: due and not-final from every month; paid within the period.
+  const open = openDelivery.map((r) => ({ ...r, netAmount: Number(r.netAmount), approvedAmount: r.approvedAmount == null ? null : Number(r.approvedAmount) }));
   const owed = new Map<number, { due: Money; paid: Money; open: Money }>();
-  for (const r of delivery) {
-    if (r.publisherId == null || r.status === "DRAFT") continue;
+  const owe = (r: (typeof open)[number], m: "due" | "paid" | "open") => {
+    if (r.publisherId == null) return;
     const o = owed.get(r.publisherId) ?? { due: new Map(), paid: new Map(), open: new Map() };
-    const p = payment(r.status);
-    add(p === "due" ? o.due : p === "paid" ? o.paid : o.open, r.currency, r.netAmount);
+    add(o[m], r.currency, counted(r));
     owed.set(r.publisherId, o);
-  }
+  };
+  for (const r of open) owe(r, payment(r.status) === "due" ? "due" : "open");
+  for (const r of delivery) if (payment(r.status) === "paid") owe(r, "paid");
+  const due = open.filter((r) => payment(r.status) === "due");
+  // Publisher validations not approved yet (in review or disputed), oldest first.
+  const pendingPub = open.filter((r) => bucket(r.side, r.status) !== "approved");
 
   // Clients that haven't sent a validation for the month: active campaigns with no submitted Sales record.
   const missing = month
@@ -155,7 +167,8 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
         <StatCard label="Pending to be sent" value={st(delivery, "READY_TO_SEND").length} href="/affiliate/delivery?status=READY_TO_SEND" />
         <StatCard label="Publisher disputes" value={st(delivery, "DISPUTED").length} warn={st(delivery, "DISPUTED").length > 0} href="/affiliate/delivery?status=DISPUTED" />
         <StatCard label="Invoices received" value={delivery.filter((r) => r.invoiceNumber || r.status === "INVOICE_RECEIVED").length} />
-        <StatCard label="Payments pending" value={fmt(sum(delivery, (r) => payment(r.status) === "due"))} note={`${delivery.filter((r) => payment(r.status) === "due").length} records`} />
+        <StatCard label="Payments pending" value={fmt(sum(due, () => true))} note={`${due.length} records, all months`} href="/affiliate/overview?month=all&payment=due" />
+        <StatCard label="Pending publisher validations" value={pendingPub.length} note="Not approved yet, all months" warn={pendingPub.some((r) => r.status === "DISPUTED")} />
         <StatCard label="Payments completed" value={fmt(sum(delivery, (r) => payment(r.status) === "paid"))} note={`${delivery.filter((r) => payment(r.status) === "paid").length} records`} />
       </Section>
 
@@ -209,7 +222,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
         </div>
       </section>
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0">
         <section className="flex flex-col gap-3">
           <h2 className="card-title">Monthly trend</h2>
           <p className="-mt-2 text-xs text-gray-500">{trendFrom} to {trendTo}, with the filters above (except the period). Approved figures only.</p>
@@ -222,9 +235,10 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
         </section>
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
+      <div className="grid items-start gap-6 xl:grid-cols-2 [&>*]:min-w-0">
         <section className="flex flex-col gap-3">
           <h2 className="card-title">What we owe publishers</h2>
+          <p className="-mt-2 text-xs text-gray-500">Due and not-final amounts cover every month; Paid covers {period}.</p>
           <div className="overflow-x-auto rounded-[14px] border border-gray-200 bg-white">
             <table className="table">
               <thead><tr><th>Publisher</th><th className="text-right">Due (approved, unpaid)</th><th className="text-right">Paid</th><th className="text-right">Not final yet</th></tr></thead>
@@ -244,6 +258,31 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
         </section>
 
         <div className="flex flex-col gap-6">
+          <section className="card space-y-2">
+            <h2 className="card-title">Pending publisher validations</h2>
+            <p className="text-xs text-gray-500">Not approved yet, from any month, oldest first.</p>
+            {pendingPub.length ? (
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead><tr><th>Record</th><th>Publisher</th><th>Campaign</th><th>Month</th><th>Status</th><th className="text-right">Net</th><th>Owner</th></tr></thead>
+                  <tbody>
+                    {pendingPub.slice(0, 50).map((r) => (
+                      <tr key={r.id}>
+                        <td><Link className="link font-mono text-[13px]" href={`/affiliate/delivery/${r.id}`}>{r.number}</Link></td>
+                        <td>{r.publisher?.name}</td>
+                        <td>{r.campaign.advertiser.name} · {r.campaign.name}</td>
+                        <td className="font-mono text-[12.5px]">{r.month}</td>
+                        <td className={r.status === "DISPUTED" ? "font-semibold text-red-700" : ""}>{STATUS_LABEL[r.status]}</td>
+                        <td className="text-right font-mono text-[13px]">{amount(r.netAmount, r.currency)}</td>
+                        <td>{r.createdBy.name}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {pendingPub.length > 50 && <p className="pt-2 text-xs text-gray-500">Showing the oldest 50 of {pendingPub.length}. <Link className="link" href="/affiliate/delivery">See all Delivery validations</Link></p>}
+              </div>
+            ) : <p className="text-sm text-gray-500">None. Every publisher validation is approved, paid or a draft.</p>}
+          </section>
           <section className="card space-y-2">
             <h2 className="card-title">Clients without a validation{month ? ` for ${month}` : ""}</h2>
             {!month ? <p className="text-sm text-gray-500">Pick a month to see this.</p>

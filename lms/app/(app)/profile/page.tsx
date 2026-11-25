@@ -18,9 +18,9 @@ export default async function ProfilePage() {
   return (
     <div className="space-y-4">
       <h1 className="h1">{user.name}</h1>
-      <dl className="card grid max-w-xl grid-cols-[140px_1fr] gap-x-4 gap-y-2 text-sm">
+      <dl className="card grid max-w-xl grid-cols-[110px_minmax(0,1fr)] gap-x-4 sm:grid-cols-[140px_minmax(0,1fr)] gap-y-2 text-sm">
         {rows.map(([k, v]) => (
-          <div key={k} className="contents"><dt className="text-gray-500">{k}</dt><dd>{v}</dd></div>
+          <div key={k} className="contents"><dt className="text-gray-500">{k}</dt><dd className="break-words">{v}</dd></div>
         ))}
       </dl>
       <Link className="btn" href="/change-password">Change password</Link>
