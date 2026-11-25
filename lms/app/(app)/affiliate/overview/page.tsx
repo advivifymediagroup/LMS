@@ -1,11 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { Prisma, ValidationStatus as Status } from "@prisma/client";
+import type { ValidationStatus as Status } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireAffiliate } from "@/lib/affiliate";
-import {
-  bucket, counted, OFFER_MODELS, PAYMENT_LABEL, PAYMENT_STATUSES, payment, reconcile, STATUS_LABEL, STATUSES, type Payment,
-} from "@/lib/affiliate-rules";
+import { overviewFilter, requireAffiliate, shiftMonth } from "@/lib/affiliate";
+import { bucket, counted, OFFER_MODELS, PAYMENT_LABEL, payment, reconcile, STATUS_LABEL, STATUSES, type RecRow } from "@/lib/affiliate-rules";
 import { todayIso } from "@/lib/leave";
 import { StatCard } from "../../ui";
 import { amount } from "../ui";
@@ -17,48 +15,41 @@ const fmt = (m: Money) => (m.size ? [...m].map(([c, n]) => amount(n, c)).join(" 
 const pct = (n: number | null) => (n == null ? "—" : `${n.toFixed(1)}%`);
 const ALL_STATUSES = [...new Set([...STATUSES.SALES, ...STATUSES.DELIVERY])];
 
+/** Reconciled rows summed by a label and currency: approved revenue, cost, margin; plus what's still open. */
+function rollup(rec: RecRow[], label: (g: RecRow) => string) {
+  const by = new Map<string, { label: string; currency: string; revenue: number; cost: number; open: number }>();
+  for (const g of rec) {
+    const k = `${label(g)}|${g.currency}`;
+    const r = by.get(k) ?? { label: label(g), currency: g.currency, revenue: 0, cost: 0, open: 0 };
+    r.revenue += g.revenue.approved;
+    r.cost += g.cost.approved;
+    r.open += g.revenue.pending + g.revenue.disputed + g.revenue.draft;
+    by.set(k, r);
+  }
+  return [...by.values()].map((r) => ({ ...r, margin: r.revenue - r.cost, pct: r.revenue ? ((r.revenue - r.cost) / r.revenue) * 100 : null }));
+}
+
 export default async function OverviewPage({ searchParams }: PageProps<"/affiliate/overview">) {
   const a = await requireAffiliate();
   if (!(a.admin || a.finance || a.leadership)) redirect("/dashboard");
   const q = await searchParams;
-  const str = (k: string) => (typeof q[k] === "string" ? (q[k] as string).trim() : "");
-  const id = (k: string) => (/^\d+$/.test(str(k)) ? Number(str(k)) : undefined);
+  const { month, year, f, where, filters, period } = await overviewFilter(q);
+  // Trend: the 12 months up to the chosen month (or year end, or this month).
+  const trendTo = month || (year ? `${year}-12` : (await todayIso()).slice(0, 7));
+  const trendFrom = shiftMonth(trendTo, -11);
 
-  // Period: a month, a whole year, or (by default) the latest month with any record.
-  const year = /^\d{4}$/.test(str("year")) ? str("year") : "";
-  let month = /^\d{4}-\d{2}$/.test(str("month")) ? str("month") : "";
-  if (!month && !year && str("month") !== "all")
-    month = (await db.validation.findFirst({ orderBy: { month: "desc" }, select: { month: true } }))?.month ?? (await todayIso()).slice(0, 7);
-  const f = {
-    advertiser: id("advertiser"), campaign: id("campaign"), publisher: id("publisher"), salesOwner: id("salesOwner"), deliveryOwner: id("deliveryOwner"),
-    geo: str("geo").toUpperCase(), offerModel: OFFER_MODELS.includes(str("offerModel") as never) ? (str("offerModel") as (typeof OFFER_MODELS)[number]) : undefined,
-    status: ALL_STATUSES.includes(str("status") as Status) ? (str("status") as Status) : undefined,
-    payment: str("payment") in PAYMENT_STATUSES ? (str("payment") as Payment) : undefined,
-  };
-
-  // Publisher, Delivery owner and payment filters only narrow the Delivery side; Sales owner only the Sales side.
-  const where: Prisma.ValidationWhereInput = {
-    AND: [
-      month ? { month } : year ? { month: { startsWith: `${year}-` } } : {},
-      f.advertiser ? { campaign: { advertiserId: f.advertiser } } : {},
-      f.campaign ? { campaignId: f.campaign } : {},
-      f.geo ? { geo: f.geo } : {},
-      f.offerModel ? { offerModel: f.offerModel } : {},
-      f.status ? { status: f.status } : {},
-      f.salesOwner ? { OR: [{ side: "DELIVERY" }, { createdById: f.salesOwner }] } : {},
-      f.publisher ? { OR: [{ side: "SALES" }, { publisherId: f.publisher }] } : {},
-      f.deliveryOwner ? { OR: [{ side: "SALES" }, { createdById: f.deliveryOwner }] } : {},
-      f.payment ? { OR: [{ side: "SALES" }, { status: { in: PAYMENT_STATUSES[f.payment] } }] } : {},
-    ],
-  };
-
-  const [rows, advertisers, campaigns, publishers, owners] = await Promise.all([
+  const [rows, advertisers, campaigns, publishers, owners, trendRows] = await Promise.all([
     // ponytail: everything for the period in memory; fine for thousands of rows a month, aggregate in SQL beyond that.
     db.validation.findMany({ where, include: { campaign: { include: { advertiser: true } }, publisher: true, createdBy: true }, take: 20000 }),
     db.advertiser.findMany({ orderBy: { name: "asc" } }),
     db.campaign.findMany({ include: { advertiser: true }, orderBy: [{ advertiser: { name: "asc" } }, { name: "asc" }] }),
     db.publisher.findMany({ orderBy: { name: "asc" } }),
     db.user.findMany({ where: { validations: { some: {} } }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.validation.findMany({
+      where: { AND: [{ month: { gte: trendFrom, lte: trendTo } }, ...filters] },
+      select: { side: true, status: true, campaignId: true, month: true, geo: true, currency: true, publisherId: true, netAmount: true, approvedAmount: true, approvedConversions: true },
+      take: 50000,
+    }),
   ]);
 
   const money = rows.map((r) => ({ ...r, netAmount: Number(r.netAmount), approvedAmount: r.approvedAmount == null ? null : Number(r.approvedAmount) }));
@@ -110,8 +101,12 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
     pendingBy.set(key, p);
   }
 
+  const num = (list: typeof trendRows) => list.map((r) => ({ ...r, netAmount: Number(r.netAmount), approvedAmount: r.approvedAmount == null ? null : Number(r.approvedAmount) }));
+  const trend = rollup(reconcile(num(trendRows)), (g) => g.month).sort((x, y) => y.label.localeCompare(x.label) || x.currency.localeCompare(y.currency));
+  const byClient = rollup(rec, (g) => campaignById.get(g.campaignId)?.advertiser.name ?? "?").sort((x, y) => y.margin - x.margin);
+  const exportQs = new URLSearchParams(Object.entries(q).filter(([, v]) => typeof v === "string" && v) as [string, string][]);
+
   const st = (list: typeof money, ...s: Status[]) => list.filter((r) => s.includes(r.status));
-  const period = month || (year ? `Year ${year}` : "All time");
   const sel = "input h-10";
 
   return (
@@ -131,6 +126,7 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
         <button className="btn h-10">Apply</button>
         <Link href="/affiliate/overview?month=all" className="link h-10 content-center text-sm">All time</Link>
         <Link href="/affiliate/overview" className="link h-10 content-center text-sm">Reset</Link>
+        <a href={`/affiliate/overview/export?${exportQs}`} className="btn ml-auto h-10">Export report (CSV)</a>
       </form>
       <p className="-mt-3 text-xs text-gray-500">
         Showing <b>{period}</b>. Only approved records count as validated revenue or cost; partial approvals count their approved part. Currencies are never added together.
@@ -215,6 +211,19 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
 
       <div className="grid items-start gap-6 xl:grid-cols-2">
         <section className="flex flex-col gap-3">
+          <h2 className="card-title">Monthly trend</h2>
+          <p className="-mt-2 text-xs text-gray-500">{trendFrom} to {trendTo}, with the filters above (except the period). Approved figures only.</p>
+          <Rollup rows={trend} first="Month" mono />
+        </section>
+        <section className="flex flex-col gap-3">
+          <h2 className="card-title">By client</h2>
+          <p className="-mt-2 text-xs text-gray-500">{period}. Open = client revenue not approved yet.</p>
+          <Rollup rows={byClient} first="Client" />
+        </section>
+      </div>
+
+      <div className="grid items-start gap-6 xl:grid-cols-2">
+        <section className="flex flex-col gap-3">
           <h2 className="card-title">What we owe publishers</h2>
           <div className="overflow-x-auto rounded-[14px] border border-gray-200 bg-white">
             <table className="table">
@@ -257,6 +266,30 @@ export default async function OverviewPage({ searchParams }: PageProps<"/affilia
           </section>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Rollup({ rows, first, mono }: { rows: ReturnType<typeof rollup>; first: string; mono?: boolean }) {
+  const m = (n: number, c: string) => (n ? amount(n, c) : "—");
+  return (
+    <div className="overflow-x-auto rounded-[14px] border border-gray-200 bg-white">
+      <table className="table">
+        <thead><tr><th>{first}</th><th className="text-right">Revenue</th><th className="text-right">Publisher cost</th><th className="text-right">Margin</th><th className="text-right">%</th><th className="text-right">Open</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={`${r.label}|${r.currency}`}>
+              <td className={mono ? "font-mono text-[12.5px]" : ""}>{r.label}</td>
+              <td className="text-right font-mono text-[13px]">{m(r.revenue, r.currency)}</td>
+              <td className="text-right font-mono text-[13px]">{m(r.cost, r.currency)}</td>
+              <td className={`text-right font-mono text-[13px] font-semibold ${r.margin < 0 ? "text-red-700" : ""}`}>{amount(r.margin, r.currency)}</td>
+              <td className="text-right font-mono text-[13px]">{pct(r.pct)}</td>
+              <td className="text-right font-mono text-[12px] text-gray-600">{m(r.open, r.currency)}</td>
+            </tr>
+          ))}
+          {!rows.length && <tr><td colSpan={6} className="py-6 text-center text-sm text-gray-500">Nothing yet.</td></tr>}
+        </tbody>
+      </table>
     </div>
   );
 }

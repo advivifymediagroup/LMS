@@ -6,6 +6,7 @@ import { getSetting, probationEnd, todayIso } from "./leave";
 import { firstCreditMonth, monthRange, proRatedQuota, toIso } from "./leave-days";
 import { runMilestones } from "./milestones";
 import { sendPendingReminders } from "./notify";
+import { runAffiliateReminders } from "./notifications";
 
 type NewRow = Pick<LeaveLedger, "userId" | "leaveTypeId" | "kind" | "period" | "note"> & { days: number };
 
@@ -114,6 +115,7 @@ export async function runAllJobs() {
     ["monthlyCredits", runMonthlyCredits],
     ["remindersSent", runDailyReminder],
     ["milestoneTasks", runMilestones],
+    ["affiliateReminders", runAffiliateReminders],
   ] as const) {
     try {
       result[name] = await job(today);

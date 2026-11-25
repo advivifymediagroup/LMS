@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { Prisma, ValidationStatus as Status } from "@prisma/client";
+import type { ValidationStatus as Status } from "@prisma/client";
 import { db } from "@/lib/db";
-import { actorFor, requireAffiliate } from "@/lib/affiliate";
+import { actorFor, listFilter, requireAffiliate } from "@/lib/affiliate";
 import { SIDES, STATUS_LABEL, STATUSES, sideFromSlug } from "@/lib/affiliate-rules";
 import { StatCard } from "../../ui";
 import { amount, totals, ValidationStatus } from "../ui";
@@ -12,25 +12,7 @@ export default async function ValidationsPage({ params, searchParams }: PageProp
   if (!side) notFound();
   const a = await requireAffiliate(side);
   const meta = SIDES[side];
-  const q = await searchParams;
-  const str = (k: string) => (typeof q[k] === "string" ? (q[k] as string).trim() : "");
-  const month = /^\d{4}-\d{2}$/.test(str("month")) ? str("month") : "";
-  const status = STATUSES[side].includes(str("status") as Status) ? (str("status") as Status) : "";
-  const search = str("q");
-
-  const where: Prisma.ValidationWhereInput = {
-    side,
-    ...(month && { month }),
-    ...(status && { status }),
-    ...(search && {
-      OR: [
-        { number: { contains: search, mode: "insensitive" } },
-        { campaign: { name: { contains: search, mode: "insensitive" } } },
-        { campaign: { advertiser: { name: { contains: search, mode: "insensitive" } } } },
-        { publisher: { name: { contains: search, mode: "insensitive" } } },
-      ],
-    }),
-  };
+  const { month, status, search, where } = listFilter(side, await searchParams);
   const rows = await db.validation.findMany({
     where,
     include: { campaign: { include: { advertiser: true } }, publisher: true, createdBy: true },
@@ -63,10 +45,14 @@ export default async function ValidationsPage({ params, searchParams }: PageProp
               {STATUSES[side].map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
             </select>
           </div>
-          <div className="min-w-[200px] flex-1"><label className="label" htmlFor="f-q">Search</label><input className="input h-10 w-full max-w-[300px]" id="f-q" name="q" defaultValue={search} placeholder={`ID, client, campaign${side === "DELIVERY" ? ", publisher" : ""}`} /></div>
+          <div className="min-w-[200px] flex-1"><label className="label" htmlFor="f-q">Search</label><input className="input h-10 w-full max-w-[300px]" id="f-q" name="q" defaultValue={search} placeholder={`ID, upload ID, client, campaign${side === "DELIVERY" ? ", publisher" : ""}`} /></div>
           <button className="btn h-10">Filter</button>
           {(month || status || search) && <Link href={base} className="link h-10 content-center text-sm">Clear</Link>}
-          {canAdd && <Link href={`${base}/new`} className="btn btn-accent ml-auto h-10">+ Add new validation</Link>}
+          <div className="ml-auto flex flex-wrap gap-2">
+            <a href={`${base}/export?${new URLSearchParams({ ...(month && { month }), ...(status && { status }), ...(search && { q: search }) })}`} className="btn h-10">Export CSV</a>
+            {canAdd && <Link href={`${base}/import`} className="btn h-10">Bulk upload</Link>}
+            {canAdd && <Link href={`${base}/new`} className="btn btn-accent h-10">+ Add new validation</Link>}
+          </div>
         </form>
 
         <div className="overflow-x-auto rounded-[14px] border border-gray-200 bg-white">

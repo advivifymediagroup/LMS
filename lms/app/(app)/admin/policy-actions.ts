@@ -133,7 +133,10 @@ export async function saveSettings(_: FormState, form: FormData): Promise<FormSt
   };
   if (smtp.host && !smtp.from) return { error: "Set a From address for emails." };
 
-  const values: Record<string, Prisma.InputJsonValue> = { workingDays, timezone, probationMonths, creditsFrom, notifyAlways, smtp };
+  const validationReminderDays = Number(form.get("validationReminderDays") ?? 7);
+  if (!Number.isInteger(validationReminderDays) || validationReminderDays < 1 || validationReminderDays > 90) return { error: "Affiliate reminders must be after 1–90 days." };
+
+  const values: Record<string, Prisma.InputJsonValue> = { workingDays, timezone, probationMonths, creditsFrom, notifyAlways, smtp, validationReminderDays };
   await db.$transaction(async (tx) => {
     const before = await tx.setting.findMany({ where: { key: { in: Object.keys(values) } } });
     await Promise.all(Object.entries(values).map(([key, value]) => tx.setting.upsert({ where: { key }, update: { value }, create: { key, value } })));

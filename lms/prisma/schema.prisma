@@ -76,6 +76,7 @@ model User {
   tasksCreated       Task[]              @relation("TaskCreator")
   validations        Validation[]
   validationFiles    ValidationFile[]
+  notifications      Notification[]
 }
 
 model AuditLog {
@@ -416,6 +417,7 @@ model Validation {
   revision            Int              @default(0) // bumped each time an approved record is revised
   paidDate            DateTime?        @db.Date // DELIVERY: when the publisher was paid
   paymentRef          String? // DELIVERY: UTR / transaction reference
+  importId            String? // bulk upload batch, e.g. IMP-20261125-0930-EMP004
   remarks             String?
   status              ValidationStatus @default(DRAFT)
   submittedAt         DateTime?
@@ -428,6 +430,7 @@ model Validation {
   @@index([side, month])
   @@index([campaignId, month])
   @@index([side, status])
+  @@index([importId])
 }
 
 // Every upload is kept; files are never replaced. Stored in the DB like policy PDFs.
@@ -442,4 +445,20 @@ model ValidationFile {
   uploadedById Int
   uploadedBy   User       @relation(fields: [uploadedById], references: [id])
   createdAt    DateTime   @default(now())
+}
+
+// In-portal notifications. `key` de-duplicates reminders (one per record per reminder window).
+model Notification {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String?
+  href      String
+  key       String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([userId, key])
+  @@index([userId, readAt])
 }

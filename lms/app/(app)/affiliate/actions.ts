@@ -6,10 +6,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
 import { actorFor, affiliateAccess, canManageDirectory, canViewSide, nextValidationNumber, type AffiliateAccess } from "@/lib/affiliate";
-import { allowedMoves, canEditRecord, CURRENCIES, fileType, MAX_FILE_BYTES, NEEDS_NOTE, needsRevision, REVISABLE, REVISION_TO, SIDES, STATUS_LABEL, type Side, type Status } from "@/lib/affiliate-rules";
+import { allowedMoves, canEditRecord, CURRENCIES, fileType, MAX_FILE_BYTES, readSheet, NEEDS_NOTE, needsRevision, REVISABLE, REVISION_TO, SIDES, STATUS_LABEL, type Side, type Status } from "@/lib/affiliate-rules";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { parseCsv } from "@/lib/csv";
 import { fromIso, todayIso } from "@/lib/leave";
+import { notifyImport, notifyStatus } from "@/lib/notifications";
 import type { FormState } from "../admin/actions";
 
 const isUnique = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
@@ -37,6 +39,41 @@ const Input = z.object({
   invoiceDate: z.preprocess(blank, z.iso.date().optional()),
   remarks: optText(2000),
 });
+
+type Parsed = z.infer<typeof Input>;
+type Built = { data: ReturnType<typeof record> } | { error: string };
+const record = (side: Side, p: Parsed, campaign: { id: number; platform: Parsed["platform"] | null }, geo: string, offerModel: NonNullable<Parsed["offerModel"]>, rejected: number, amount: number, deduction: number) => ({
+  month: p.month, campaignId: campaign.id, geo: geo.toUpperCase(), platform: p.platform ?? campaign.platform, offerModel,
+  totalConversions: p.totalConversions, approvedConversions: p.approvedConversions, rejectedConversions: rejected,
+  amount, deduction, netAmount: Math.round((amount - deduction) * 100) / 100, currency: p.currency, remarks: p.remarks ?? null,
+  ...(side === "DELIVERY"
+    ? { publisherId: p.publisherId!, payoutRate: p.payoutRate ?? null, invoiceNumber: p.invoiceNumber ?? null, invoiceDate: p.invoiceDate ? fromIso(p.invoiceDate) : null }
+    : { clientRef: p.clientRef ?? null }),
+});
+
+/** Checks the figures and works out rejected, gross and net. Shared by manual entry and bulk upload. */
+function build(side: Side, p: Parsed, today: string, campaign: { id: number; geo: string | null; offerModel: Parsed["offerModel"] | null; platform: Parsed["platform"] | null } | null, publisherOk: boolean): Built {
+  if (p.month > today.slice(0, 7)) return { error: "The validation month can't be in the future." };
+  if (!campaign) return { error: "Pick a campaign." };
+  const delivery = side === "DELIVERY";
+  if (delivery && !publisherOk) return { error: "Pick a publisher." };
+  const geo = p.geo ?? campaign.geo;
+  const offerModel = p.offerModel ?? campaign.offerModel;
+  if (!geo) return { error: "Enter the GEO (the campaign has none set)." };
+  if (!offerModel) return { error: "Pick the offer model (the campaign has none set)." };
+  if (p.approvedConversions > p.totalConversions) return { error: "Approved conversions can't be more than the total." };
+  const rejected = p.rejectedConversions ?? p.totalConversions - p.approvedConversions;
+  if (p.approvedConversions + rejected > p.totalConversions) return { error: "Approved plus rejected conversions can't be more than the total." };
+  // Delivery with a payout rate: gross is always approved conversions × rate. Without one, it's entered.
+  const amount = delivery && p.payoutRate != null ? Math.round(p.approvedConversions * p.payoutRate * 100) / 100 : p.amount;
+  if (amount == null) return { error: delivery ? "Enter the gross amount or a payout rate." : "Enter the approved amount." };
+  const deduction = p.deduction ?? 0;
+  if (deduction > amount) return { error: "The deduction can't be more than the amount." };
+  if (p.invoiceDate && p.invoiceDate > today) return { error: "The invoice date can't be in the future." };
+  return { data: record(side, p, campaign, geo, offerModel, rejected, amount, deduction) };
+}
+
+const by = (a: AffiliateAccess) => ({ id: a.user.id, name: a.user.name, finance: a.finance });
 
 async function access() {
   return affiliateAccess(await requireUser());
@@ -66,26 +103,11 @@ export async function saveValidation(side: Side, id: number | null, _: FormState
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const p = parsed.data;
   const today = await todayIso();
-  if (p.month > today.slice(0, 7)) return { error: "The validation month can't be in the future." };
-
   const campaign = await db.campaign.findUnique({ where: { id: p.campaignId } });
-  if (!campaign) return { error: "Pick a campaign." };
-  const delivery = side === "DELIVERY";
-  if (delivery && !(p.publisherId && (await db.publisher.findUnique({ where: { id: p.publisherId } })))) return { error: "Pick a publisher." };
-
-  const geo = p.geo ?? campaign.geo;
-  const offerModel = p.offerModel ?? campaign.offerModel;
-  if (!geo) return { error: "Enter the GEO (the campaign has none set)." };
-  if (!offerModel) return { error: "Pick the offer model (the campaign has none set)." };
-  if (p.approvedConversions > p.totalConversions) return { error: "Approved conversions can't be more than the total." };
-  const rejected = p.rejectedConversions ?? p.totalConversions - p.approvedConversions;
-  if (p.approvedConversions + rejected > p.totalConversions) return { error: "Approved plus rejected conversions can't be more than the total." };
-
-  // Delivery with a payout rate: gross is always approved conversions × rate. Without one, it's entered.
-  const amount = delivery && p.payoutRate != null ? Math.round(p.approvedConversions * p.payoutRate * 100) / 100 : p.amount;
-  if (amount == null) return { error: delivery ? "Enter the gross amount or a payout rate." : "Enter the approved amount." };
-  const deduction = p.deduction ?? 0;
-  if (deduction > amount) return { error: "The deduction can't be more than the amount." };
+  const publisherOk = !!p.publisherId && !!(await db.publisher.findUnique({ where: { id: p.publisherId } }));
+  const built = build(side, p, today, campaign, publisherOk);
+  if ("error" in built) return built;
+  const { data } = built;
 
   const file = await readFile(form);
   if (typeof file === "string") return { error: file };
@@ -98,15 +120,6 @@ export async function saveValidation(side: Side, id: number | null, _: FormState
   const revision = revising
     ? { revision: before!.revision + 1, ...(reopen && { status: REVISION_TO[side], approvedAmount: null }) }
     : {};
-
-  const data = {
-    month: p.month, campaignId: campaign.id, geo: geo.toUpperCase(), platform: p.platform ?? campaign.platform, offerModel,
-    totalConversions: p.totalConversions, approvedConversions: p.approvedConversions, rejectedConversions: rejected,
-    amount, deduction, netAmount: Math.round((amount - deduction) * 100) / 100, currency: p.currency, remarks: p.remarks ?? null,
-    ...(delivery
-      ? { publisherId: p.publisherId!, payoutRate: p.payoutRate ?? null, invoiceNumber: p.invoiceNumber ?? null, invoiceDate: p.invoiceDate ? fromIso(p.invoiceDate) : null }
-      : { clientRef: p.clientRef ?? null }),
-  };
 
   let savedId = id;
   if (id) {
@@ -123,6 +136,7 @@ export async function saveValidation(side: Side, id: number | null, _: FormState
       return true;
     });
     if (!saved) return { error: "Someone changed this record's status while you were editing. Refresh and try again." };
+    if (reopen) await notifyStatus(id, by(a), reason);
   } else {
     // Numbers come from the latest one; retry if two people save at the same moment.
     for (let attempt = 0; ; attempt++) {
@@ -193,6 +207,7 @@ export async function moveValidation(id: number, _: FormState, form: FormData): 
     return true;
   });
   if (!moved) return { error: "Someone else changed this record first. Refresh the page." };
+  await notifyStatus(id, by(a), note);
   revalidatePath(`/affiliate/${SIDES[v.side].slug}`);
   revalidatePath(`/affiliate/${SIDES[v.side].slug}/${id}`);
   return { ok: `Moved to ${STATUS_LABEL[to]}.` };
@@ -213,6 +228,113 @@ export async function addFile(id: number, _: FormState, form: FormData): Promise
   });
   revalidatePath(`/affiliate/${SIDES[v.side].slug}/${id}`);
   return { ok: `Uploaded ${file.fileName}.` };
+}
+
+// ---------- Bulk upload ----------
+
+export type ImportRow = { line: number; what: string; month: string; geo: string; approved: string; net: string; error?: string };
+export type ImportState = { error?: string; ok?: string; csv?: string; rows?: ImportRow[]; done?: { count: number; importId: string } } | null;
+
+const fmt = (n: number, c: string) => `${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })} ${c}`;
+
+/**
+ * Bulk upload in two steps, both through this action: "check" parses the file (or the corrected
+ * text) and returns a preview with every problem; "import" re-checks and saves only if nothing is wrong.
+ */
+export async function importValidations(side: Side, _: ImportState, form: FormData): Promise<ImportState> {
+  const a = await access();
+  if (!(actorFor(a, side).team || a.admin)) return { error: `Only the ${SIDES[side].team} team can upload these.` };
+  const file = form.get("file");
+  let csv = String(form.get("csv") ?? "");
+  if (file instanceof File && file.size > 0) {
+    if (file.size > 2 * 1024 * 1024) return { error: "The file is larger than 2 MB. Split it into smaller files." };
+    if (!/\.(csv|txt)$/i.test(file.name)) return { error: "Upload the template saved as CSV (File → Save As → CSV UTF-8). Excel .xlsx files can't be read yet." };
+    csv = await file.text();
+  }
+  if (!csv.trim()) return { error: "Choose the filled-in template." };
+  const sheet = readSheet(side, parseCsv(csv));
+  if ("error" in sheet) return { error: sheet.error, csv };
+
+  const [advertisers, campaigns, publishers, today] = await Promise.all([
+    db.advertiser.findMany(), db.campaign.findMany(), db.publisher.findMany(), todayIso(),
+  ]);
+  const low = (x: string) => x.trim().toLowerCase();
+  const advByName = new Map(advertisers.map((x) => [low(x.name), x]));
+  const pubByName = new Map(publishers.flatMap((x) => [[low(x.name), x], ...(x.code ? [[low(x.code), x] as const] : [])]));
+
+  const rows: (ImportRow & { data?: Extract<Built, { data: unknown }>["data"] })[] = [];
+  for (const { line, values: v } of sheet.lines) {
+    const adv = advByName.get(low(v.client));
+    const camp = adv && campaigns.find((c) => c.advertiserId === adv.id && low(c.name) === low(v.campaign));
+    const pub = side === "DELIVERY" ? pubByName.get(low(v.publisher)) : undefined;
+    const what = [v.client, v.campaign, side === "DELIVERY" ? v.publisher : ""].filter(Boolean).join(" · ");
+    const row: (typeof rows)[number] = { line, what, month: v.month, geo: v.geo, approved: v.approvedConversions, net: "" };
+    rows.push(row);
+    if (!adv) { row.error = v.client ? `Client "${v.client}" isn't in Clients & publishers.` : "Client is missing."; continue; }
+    if (!camp) { row.error = v.campaign ? `${adv.name} has no campaign called "${v.campaign}".` : "Campaign is missing."; continue; }
+    if (side === "DELIVERY" && !pub) { row.error = v.publisher ? `Publisher "${v.publisher}" isn't in Clients & publishers.` : "Publisher is missing."; continue; }
+    if (v.platform && !["ANDROID", "IOS", "WEB"].includes(v.platform)) { row.error = "Platform must be Android, iOS, Web or blank."; continue; }
+    if (v.offerModel && !["CPI", "CPA", "CPS", "CPL", "CPR"].includes(v.offerModel)) { row.error = "Offer model must be CPI, CPA, CPS, CPL or CPR."; continue; }
+    if (v.currency && !(CURRENCIES as readonly string[]).includes(v.currency)) { row.error = `Currency must be one of ${CURRENCIES.join(", ")}.`; continue; }
+    const parsed = Input.safeParse({ ...v, campaignId: camp.id, publisherId: pub?.id });
+    if (!parsed.success) { row.error = parsed.error.issues[0].message.replace("Pick the validation month.", "Month must look like 2026-11."); continue; }
+    const built = build(side, parsed.data, today, camp, !!pub);
+    if ("error" in built) { row.error = built.error; continue; }
+    row.data = built.data;
+    row.geo = built.data.geo;
+    row.net = fmt(built.data.netAmount, built.data.currency);
+  }
+
+  // Duplicates: same campaign, month, GEO, currency (and publisher), within the file or already saved.
+  const dupKey = (d: { campaignId: number; month: string; geo: string; currency: string; publisherId?: number | null }) =>
+    `${d.campaignId}|${d.month}|${d.geo}|${d.currency}|${d.publisherId ?? ""}`;
+  const ok = rows.filter((r) => r.data);
+  const existing = ok.length
+    ? await db.validation.findMany({
+        where: { side, campaignId: { in: [...new Set(ok.map((r) => r.data!.campaignId))] }, month: { in: [...new Set(ok.map((r) => r.data!.month))] } },
+        select: { number: true, campaignId: true, month: true, geo: true, currency: true, publisherId: true },
+      })
+    : [];
+  const saved = new Map(existing.map((e) => [dupKey(e), e.number]));
+  const seen = new Map<string, number>();
+  for (const r of ok) {
+    const k = dupKey(r.data!);
+    if (seen.has(k)) r.error = `Duplicate of line ${seen.get(k)} (same campaign, month, GEO, currency${side === "DELIVERY" ? " and publisher" : ""}).`;
+    else if (saved.has(k)) r.error = `Already saved as ${saved.get(k)}. Edit that record instead.`;
+    seen.set(k, seen.get(k) ?? r.line);
+  }
+
+  const preview: ImportRow[] = rows.map(({ line, what, month, geo, approved, net, error }) => ({ line, what, month, geo, approved, net, error }));
+  const bad = rows.filter((r) => r.error).length;
+  if (form.get("intent") !== "import" || bad)
+    return { csv, rows: preview, ...(form.get("intent") === "import" && bad && { error: `Nothing imported: fix the ${bad} row${bad === 1 ? "" : "s"} marked below.` }) };
+
+  // Save everything in one go, numbered in sequence, each tagged with the upload ID.
+  const submit = form.get("submit") === "on";
+  const stamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
+  const importId = `IMP-${stamp}-${a.user.employeeId}`;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const first = await nextValidationNumber(side, today);
+      const prefix = first.slice(0, -4);
+      const start = Number(first.slice(-4));
+      await db.$transaction(async (tx) => {
+        for (const [i, r] of rows.entries()) {
+          const number = prefix + String(start + i).padStart(4, "0");
+          const v = await tx.validation.create({
+            data: { ...r.data!, side, number, importId, createdById: a.user.id, ...(submit && { status: "SUBMITTED", submittedAt: new Date() }) },
+          });
+          await writeAudit(tx, { actorId: a.user.id, action: "IMPORT", entityType: "VALIDATION", entityId: v.id, after: { number, status: v.status, ...r.data }, metadata: { importId, line: r.line } });
+        }
+      }, { timeout: 120_000 });
+      break;
+    } catch (e) {
+      if (!isUnique(e) || attempt >= 3) throw e;
+    }
+  }
+  await notifyImport(side, rows.length, importId, by(a), submit);
+  revalidatePath(`/affiliate/${SIDES[side].slug}`);
+  return { done: { count: rows.length, importId }, ok: `Imported ${rows.length} record${rows.length === 1 ? "" : "s"}${submit ? " and submitted them for review" : " as drafts"}.` };
 }
 
 // ---------- Directory: advertisers, campaigns, publishers ----------

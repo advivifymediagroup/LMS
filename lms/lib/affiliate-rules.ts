@@ -183,3 +183,121 @@ export function fileType(name: string, head: Uint8Array): string | null {
   if (ext === "csv" && !head.includes(0)) return "text/csv";
   return null;
 }
+
+// ---------- Notifications ----------
+/** Who hears about a record reaching each status. The person who made the change is never notified. */
+export type Audience = "finance" | "owner";
+export const NOTIFY: Record<Side, Partial<Record<Status, Audience[]>>> = {
+  SALES: { SUBMITTED: ["finance"], DISPUTED: ["owner", "finance"], APPROVED: ["owner"], PARTIALLY_APPROVED: ["owner"] },
+  DELIVERY: {
+    SUBMITTED: ["finance"], PENDING_FINANCE_REVIEW: ["finance"], READY_TO_SEND: ["owner"], DISPUTED: ["owner", "finance"],
+    APPROVED: ["finance"], INVOICE_RECEIVED: ["finance"], PAYMENT_PENDING: ["finance"], PAID: ["owner"],
+  },
+};
+/** Statuses where the record still needs someone to act (reminders go out when they sit too long). */
+export const UNRESOLVED: Record<Side, Status[]> = {
+  SALES: ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "DISPUTED"],
+  DELIVERY: STATUSES.DELIVERY.filter((s) => s !== "PAID" && s !== "CLOSED"),
+};
+
+// ---------- Bulk upload ----------
+type Col = { header: string; field: string; required?: boolean; example: string };
+const c = (header: string, field: string, example: string, required = false): Col => ({ header, field, example, required });
+export const IMPORT_COLUMNS: Record<Side, Col[]> = {
+  SALES: [
+    c("Month", "month", "2026-11", true), c("Client", "client", "Acme Ads", true), c("Campaign", "campaign", "Acme Summer CPI", true),
+    c("Client campaign ID", "clientRef", "AC-123"), c("GEO", "geo", "IN"), c("Platform", "platform", "Android"), c("Offer model", "offerModel", "CPI"),
+    c("Total conversions", "totalConversions", "1200", true), c("Approved conversions", "approvedConversions", "1150", true),
+    c("Rejected conversions", "rejectedConversions", "50"), c("Approved amount", "amount", "5750", true), c("Deduction", "deduction", "0"),
+    c("Currency", "currency", "USD", true), c("Remarks", "remarks", ""),
+  ],
+  DELIVERY: [
+    c("Month", "month", "2026-11", true), c("Client", "client", "Acme Ads", true), c("Campaign", "campaign", "Acme Summer CPI", true),
+    c("Publisher", "publisher", "Blue Media", true), c("GEO", "geo", "IN"), c("Platform", "platform", "Android"), c("Offer model", "offerModel", "CPI"),
+    c("Delivered conversions", "totalConversions", "600", true), c("Approved conversions", "approvedConversions", "580", true),
+    c("Rejected conversions", "rejectedConversions", "20"), c("Payout rate", "payoutRate", "2"), c("Gross amount", "amount", ""),
+    c("Deduction", "deduction", "0"), c("Currency", "currency", "USD", true), c("Invoice number", "invoiceNumber", ""),
+    c("Invoice date", "invoiceDate", ""), c("Remarks", "remarks", ""),
+  ],
+};
+export const MAX_IMPORT_ROWS = 1000;
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+const pad = (n: number | string) => String(n).padStart(2, "0");
+/** "2026-11", "2026-11-01", "11/2026", "Nov-26", "November 2026", "01/11/2026" → "2026-11"; else the input unchanged. */
+export function normMonth(v: string) {
+  const s = v.trim();
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})(?:[-/.]\d{1,2})?$/);
+  if (m) return `${m[1]}-${pad(m[2])}`;
+  m = s.match(/^(?:\d{1,2}[-/.])?(\d{1,2})[-/.](\d{4})$/);
+  if (m) return `${m[2]}-${pad(m[1])}`;
+  m = s.match(/^([a-z]{3})[a-z]*[-\s']+(\d{2}|\d{4})$/i);
+  const i = m ? MONTHS.indexOf(m[1].toLowerCase()) : -1;
+  if (m && i >= 0) return `${m[2].length === 2 ? "20" + m[2] : m[2]}-${pad(i + 1)}`;
+  return s;
+}
+/** "2026-11-05", "05/11/2026", "05-11-2026", "05.11.2026" (day first) → "2026-11-05"; else unchanged. */
+export function normDate(v: string) {
+  const s = v.trim();
+  const m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  return m ? `${m[3]}-${pad(m[2])}-${pad(m[1])}` : s.replace(/^(\d{4})-(\d{1,2})-(\d{1,2})$/, (_, y, mo, d) => `${y}-${pad(mo)}-${pad(d)}`);
+}
+/** "1,234.50", " $5 000 " → "1234.50", "5000". */
+export const normNumber = (v: string) => v.replace(/[\s,$€£₹]/g, "");
+
+const key = (h: string) => h.toLowerCase().replace(/\(.*?\)|\*/g, "").replace(/[^a-z]/g, "");
+
+/** Spreadsheet rows (header first) → one object of raw values per line, keyed by form field. */
+export function readSheet(side: Side, rows: string[][]): { error: string } | { lines: { line: number; values: Record<string, string> }[] } {
+  if (!rows.length) return { error: "The file is empty." };
+  const cols = IMPORT_COLUMNS[side];
+  const at = rows[0].map(key);
+  const index = new Map(cols.map((col) => [col.field, at.indexOf(key(col.header))]));
+  const missing = cols.filter((col) => col.required && index.get(col.field)! < 0).map((col) => col.header);
+  if (missing.length) return { error: `The header row is missing: ${missing.join(", ")}. Download the ${side === "SALES" ? "Sales" : "Delivery"} template and keep its first row.` };
+  if (rows.length - 1 > MAX_IMPORT_ROWS) return { error: `Up to ${MAX_IMPORT_ROWS} rows per file. Split it into smaller files.` };
+  if (rows.length === 1) return { error: "The file has a header row but no records." };
+  const numeric = ["totalConversions", "approvedConversions", "rejectedConversions", "amount", "payoutRate", "deduction"];
+  return {
+    lines: rows.slice(1).map((r, i) => {
+      const values: Record<string, string> = {};
+      for (const col of cols) {
+        let v = (r[index.get(col.field)!] ?? "").trim();
+        if (col.field === "month") v = normMonth(v);
+        else if (col.field === "invoiceDate") v = normDate(v);
+        else if (numeric.includes(col.field)) v = normNumber(v);
+        else if (["currency", "offerModel", "platform"].includes(col.field)) v = v.toUpperCase();
+        values[col.field] = v;
+      }
+      return { line: i + 2, values };
+    }),
+  };
+}
+
+// ---------- History ----------
+// Figures worth showing in the history when they change.
+const TRACKED: [string, string][] = [
+  ["totalConversions", "Total conv."], ["approvedConversions", "Approved conv."], ["rejectedConversions", "Rejected conv."],
+  ["payoutRate", "Payout rate"], ["amount", "Amount"], ["deduction", "Deduction"], ["netAmount", "Net"], ["currency", "Currency"],
+  ["month", "Month"], ["geo", "GEO"], ["invoiceNumber", "Invoice no."], ["invoiceDate", "Invoice date"],
+  ["approvedAmount", "Approved part"], ["paidDate", "Paid on"], ["paymentRef", "Payment ref."],
+];
+// Audit values: dates are stored as ISO timestamps; show just the day.
+const show = (x: unknown) => (x == null || x === "" ? "—" : String(x).replace(/^(\d{4}-\d{2}-\d{2})T00:00:00\.000Z$/, "$1"));
+
+/** One audit entry of a validation in words: title, changed figures (old → new), note, file. */
+export function describe(h: { action: string; before: unknown; after: unknown; metadata: unknown }) {
+  const before = (h.before ?? {}) as Record<string, unknown>;
+  const after = (h.after ?? {}) as Record<string, unknown>;
+  const meta = (h.metadata ?? {}) as { note?: string; file?: string; importId?: string; line?: number };
+  const label = (s: unknown) => STATUS_LABEL[s as Status] ?? String(s);
+  const fields = h.action === "UPDATE" || h.action === "REVISION" ? TRACKED.filter(([k]) => show(before[k]) !== show(after[k])) : h.action === "STATUS" ? TRACKED.filter(([k]) => k in after) : [];
+  const moved = after.status && before.status !== after.status ? `${label(before.status)} → ${label(after.status)}` : "";
+  const title = h.action === "CREATE" ? "Created"
+    : h.action === "IMPORT" ? `Created by bulk upload${meta.importId ? ` ${meta.importId}` : ""}${meta.line ? `, line ${meta.line}` : ""}${after.status && after.status !== "DRAFT" ? ` (${label(after.status)})` : ""}`
+    : h.action === "STATUS" ? moved
+    : h.action === "REVISION" ? `Revision ${String(after.revision)}${moved ? ` · ${moved}` : ""}`
+    : h.action === "UPLOAD" ? "Uploaded a file" : "Edited";
+  const changes = fields.map(([k, l]) => `${l}: ${h.action === "STATUS" ? show(after[k]) : `${show(before[k])} → ${show(after[k])}`}`);
+  return { title, changes, note: meta.note, file: meta.file };
+}

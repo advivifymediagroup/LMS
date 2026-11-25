@@ -8,13 +8,14 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 export default async function SettingsPage() {
   await requireUser(["ADMIN"]);
-  const [workingDays, timezone, probationMonths, creditsFrom, notifyAlways, smtp] = await Promise.all([
+  const [workingDays, timezone, probationMonths, creditsFrom, notifyAlways, smtp, reminderDays] = await Promise.all([
     getSetting("workingDays", [1, 2, 3, 4, 5]),
     getSetting("timezone", "Asia/Kolkata"),
     getSetting("probationMonths", 3),
     getSetting("creditsFrom", ""),
     getSetting<string[]>("notifyAlways", []),
     getSetting<SmtpSettings | null>("smtp", null),
+    getSetting("validationReminderDays", 7),
   ]);
 
   return (
@@ -50,6 +51,11 @@ export default async function SettingsPage() {
           Monthly and yearly credits are only added from this month on; opening balances cover the time before it.
           Moving it earlier credits the missed months to everyone on the next run.
         </p>
+        <div className="max-w-xs">
+          <label className="label" htmlFor="validationReminderDays">Affiliate reminders after (days)</label>
+          <input className="input" id="validationReminderDays" name="validationReminderDays" type="number" min={1} max={90} defaultValue={reminderDays} required />
+          <p className="mt-1 text-xs text-gray-500">A validation left unresolved this long, or a publisher that hasn&apos;t acknowledged, sends a reminder in the portal.</p>
+        </div>
         <div>
           <label className="label" htmlFor="notifyAlways">Always email on every application (HR, Finance)</label>
           <input className="input" id="notifyAlways" name="notifyAlways" defaultValue={notifyAlways.join(", ")} />

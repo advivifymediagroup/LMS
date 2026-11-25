@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { actorFor, getValidation, requireAffiliate } from "@/lib/affiliate";
-import { allowedMoves, canEditRecord, FILE_ACCEPT, NEEDS_NOTE, needsRevision, PAYMENT_LABEL, payment, PLATFORMS, REVISABLE, REVISION_TO, SIDES, STATUS_LABEL, sideFromSlug, type Status } from "@/lib/affiliate-rules";
+import { allowedMoves, describe, canEditRecord, FILE_ACCEPT, NEEDS_NOTE, needsRevision, PAYMENT_LABEL, payment, PLATFORMS, REVISABLE, REVISION_TO, SIDES, STATUS_LABEL, sideFromSlug } from "@/lib/affiliate-rules";
 import { todayIso } from "@/lib/leave";
 import { toIso } from "@/lib/leave-days";
 import { ActionForm } from "../../../action-form";
@@ -13,16 +13,6 @@ import { amount, ValidationForm, ValidationStatus } from "../../ui";
 const PLATFORM_LABEL = Object.fromEntries(PLATFORMS) as Record<string, string>;
 const when = (d: Date) => d.toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(n / 1024)} KB`);
-
-// Figures worth showing in the history when they change.
-const TRACKED: [string, string][] = [
-  ["totalConversions", "Total conv."], ["approvedConversions", "Approved conv."], ["rejectedConversions", "Rejected conv."],
-  ["payoutRate", "Payout rate"], ["amount", "Amount"], ["deduction", "Deduction"], ["netAmount", "Net"], ["currency", "Currency"],
-  ["month", "Month"], ["geo", "GEO"], ["invoiceNumber", "Invoice no."], ["invoiceDate", "Invoice date"],
-  ["approvedAmount", "Approved part"], ["paidDate", "Paid on"], ["paymentRef", "Payment ref."],
-];
-// Audit values: dates are stored as ISO timestamps; show just the day.
-const show = (x: unknown) => (x == null || x === "" ? "—" : String(x).replace(/^(\d{4}-\d{2}-\d{2})T00:00:00\.000Z$/, "$1"));
 
 export default async function ValidationPage({ params }: PageProps<"/affiliate/[side]/[id]">) {
   const { side: slug, id } = await params;
@@ -60,6 +50,7 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
           ...(v.paymentRef ? [["Payment ref.", <span key="r" className="font-mono">{v.paymentRef}</span>]] : [])] as [string, React.ReactNode][])
       : []),
     ["Uploaded by", v.createdBy.name],
+    ...(v.importId ? ([["Bulk upload", <span key="i" className="font-mono text-[12px]">{v.importId}</span>]] as [string, React.ReactNode][]) : []),
     ["Created", when(v.createdAt)],
   ];
   const figures: [string, string][] = [
@@ -142,22 +133,13 @@ export default async function ValidationPage({ params }: PageProps<"/affiliate/[
           <h2 className="card-title">History</h2>
           <ol className="space-y-2.5">
             {history.map((h) => {
-              const before = (h.before ?? {}) as Record<string, unknown>;
-              const after = (h.after ?? {}) as Record<string, unknown>;
-              const meta = (h.metadata ?? {}) as { note?: string; file?: string };
-              const changes = h.action === "UPDATE" || h.action === "REVISION" ? TRACKED.filter(([k]) => show(before[k]) !== show(after[k]))
-                : h.action === "STATUS" ? TRACKED.filter(([k]) => k in after) : [];
-              const moved = after.status && before.status !== after.status ? `${STATUS_LABEL[before.status as Status] ?? before.status} → ${STATUS_LABEL[after.status as Status] ?? after.status}` : "";
-              const title = h.action === "CREATE" ? "Created"
-                : h.action === "STATUS" ? moved
-                : h.action === "REVISION" ? `Revision ${String(after.revision)}${moved ? ` · ${moved}` : ""}`
-                : h.action === "UPLOAD" ? "Uploaded a file" : "Edited";
+              const d = describe(h);
               return (
                 <li key={h.id} className="border-t border-[#f0ece6] pt-2 text-[13px] first:border-0 first:pt-0">
-                  <div className="font-semibold">{title}</div>
-                  {changes.map(([k, label]) => <div key={k} className="font-mono text-[12px] text-gray-600">{label}: {h.action === "STATUS" ? show(after[k]) : `${show(before[k])} → ${show(after[k])}`}</div>)}
-                  {meta.file && <div className="text-xs text-gray-600">File: {meta.file}</div>}
-                  {meta.note && <div className="mt-1 rounded-md bg-[#fcfbf9] px-2 py-1 whitespace-pre-wrap">{meta.note}</div>}
+                  <div className="font-semibold">{d.title}</div>
+                  {d.changes.map((c) => <div key={c} className="font-mono text-[12px] text-gray-600">{c}</div>)}
+                  {d.file && <div className="text-xs text-gray-600">File: {d.file}</div>}
+                  {d.note && <div className="mt-1 rounded-md bg-[#fcfbf9] px-2 py-1 whitespace-pre-wrap">{d.note}</div>}
                   <div className="text-xs text-gray-500">{h.actor?.name ?? "System"} · {when(h.createdAt)}</div>
                 </li>
               );

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { allowedMoves, bucket, canEditRecord, fileType, MOVES, needsRevision, payment, reconcile, REVISABLE, STATUSES, type MoneyRow } from "./affiliate-rules.ts";
+import { allowedMoves, bucket, canEditRecord, fileType, IMPORT_COLUMNS, MOVES, needsRevision, normDate, normMonth, NOTIFY, payment, readSheet, reconcile, REVISABLE, STATUSES, UNRESOLVED, type MoneyRow } from "./affiliate-rules.ts";
 
 const team = { admin: false, finance: false, team: true };
 const finance = { admin: false, finance: true, team: false };
@@ -77,4 +77,29 @@ test("fileType checks the bytes, not just the name", () => {
   assert.equal(fileType("r.csv", b(0x61, 0x2c, 0x62)), "text/csv");
   assert.equal(fileType("r.csv", b(0x61, 0, 0x62)), null);
   assert.equal(fileType("r.exe", b(0x4d, 0x5a)), null);
+});
+
+test("import: Excel's month and date spellings are normalised", () => {
+  for (const v of ["2026-11", "2026-11-01", "11/2026", "Nov-26", "Nov 2026", "November 2026", "01/11/2026", "2026/11"]) assert.equal(normMonth(v), "2026-11", v);
+  assert.equal(normMonth("Foo 2026"), "Foo 2026");
+  assert.equal(normDate("05/11/2026"), "2026-11-05");
+  assert.equal(normDate("5.1.2026"), "2026-01-05");
+  assert.equal(normDate("2026-1-5"), "2026-01-05");
+});
+
+test("import: header row matched loosely, values tidied, missing columns named", () => {
+  const head = IMPORT_COLUMNS.SALES.map((c) => c.header.toUpperCase() + " *");
+  const r = readSheet("SALES", [head, IMPORT_COLUMNS.SALES.map((c) => c.example).map((v, i) => (i === 10 ? "5,750" : i === 12 ? "usd" : v))]);
+  assert.ok("lines" in r);
+  assert.equal(r.lines[0].line, 2);
+  assert.deepEqual([r.lines[0].values.amount, r.lines[0].values.currency, r.lines[0].values.platform], ["5750", "USD", "ANDROID"]);
+  const bad = readSheet("DELIVERY", [["Month", "Client", "Campaign"], ["2026-11", "a", "b"]]);
+  assert.ok("error" in bad && bad.error.includes("Publisher") && bad.error.includes("Currency"));
+  assert.ok("error" in readSheet("SALES", [head]));
+});
+
+test("notifications only name real statuses; unresolved excludes final ones", () => {
+  for (const side of ["SALES", "DELIVERY"] as const) for (const s of Object.keys(NOTIFY[side])) assert.ok(STATUSES[side].includes(s as never), s);
+  assert.ok(!UNRESOLVED.DELIVERY.includes("PAID") && UNRESOLVED.DELIVERY.includes("PAYMENT_PENDING"));
+  assert.ok(!UNRESOLVED.SALES.includes("APPROVED"));
 });

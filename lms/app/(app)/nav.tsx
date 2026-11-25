@@ -62,6 +62,8 @@ const SECTIONS: [string, string][] = [
   ["/reports", "Monthly reports"],
   ["/finance", "Finance"],
   ["/affiliate/overview", "Affiliate overview"],
+  ["/affiliate/activity", "Affiliate activity"],
+  ["/notifications", "Notifications"],
   ["/affiliate/sales", "Sales validations"],
   ["/affiliate/delivery", "Delivery validations"],
   ["/affiliate/directory", "Clients & publishers"],

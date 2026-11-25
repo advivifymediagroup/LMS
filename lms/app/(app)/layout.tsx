@@ -24,7 +24,7 @@ async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const today = await todayIso();
   const approver = user.role !== "EMPLOYEE";
-  const [pendingApprovals, openTasks, teams, dept, probation] = await Promise.all([
+  const [pendingApprovals, openTasks, teams, dept, probation, unread] = await Promise.all([
     approver
       ? db.leaveRequest.count({ where: { status: "PENDING", ...(user.role === "ADMIN" ? { userId: { not: user.id } } : { user: { managerId: user.id } }) } })
       : 0,
@@ -32,6 +32,7 @@ async function AppShell({ children }: { children: React.ReactNode }) {
     db.department.findMany({ where: user.role === "ADMIN" ? {} : { id: user.departmentId ?? -1 }, orderBy: { name: "asc" }, include: { _count: { select: { tasks: { where: { status: { not: "DONE" } } } } } } }),
     user.departmentId ? db.department.findUnique({ where: { id: user.departmentId } }) : null,
     probationEnd(user),
+    db.notification.count({ where: { userId: user.id, readAt: null } }),
   ]);
   const finance = user.role === "ADMIN" || dept?.name === "Finance";
   const financeTeamId = user.role === "ADMIN" ? (await db.department.findUnique({ where: { name: "Finance" } }))?.id : dept?.id;
@@ -42,7 +43,7 @@ async function AppShell({ children }: { children: React.ReactNode }) {
     ...(seesAll || dept?.name === "Sales" ? [{ href: "/affiliate/sales", label: "Sales validations" }] : []),
     ...(seesAll || dept?.name === "Delivery" ? [{ href: "/affiliate/delivery", label: "Delivery validations" }] : []),
   ];
-  if (affiliate.length) affiliate.push({ href: "/affiliate/directory", label: "Clients & publishers" });
+  if (affiliate.length) affiliate.push({ href: "/affiliate/directory", label: "Clients & publishers" }, { href: "/affiliate/activity", label: "Activity log" });
   const roleLabel = user.role === "EMPLOYEE" && today < probation ? "New hire" : ROLE_LABEL[user.role];
 
   const nav: NavItem[] = [
@@ -122,6 +123,10 @@ async function AppShell({ children }: { children: React.ReactNode }) {
             <div className="eyebrow">Advivify · {roleLabel}</div>
             <PageTitle />
           </div>
+          <Link href="/notifications" className="btn btn-sm relative h-10" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} title="Notifications">
+            <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></svg>
+            {unread > 0 && <span className="absolute -top-1.5 -right-1.5 min-w-5 rounded-full bg-brand-500 px-1 text-center font-mono text-[11px] leading-5 font-bold text-char">{unread > 99 ? "99+" : unread}</span>}
+          </Link>
           <Link href="/leave#apply" className="btn btn-accent btn-sm h-10">Request leave</Link>
         </header>
         <div className="w-full max-w-[1440px] px-4 pt-7 pb-12 md:px-8 print:p-0">{children}</div>
