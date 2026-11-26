@@ -1,0 +1,11 @@
+#!/bin/sh
+# Daily portal database backup (includes uploaded files). Keeps 14 days.
+set -e
+f=/var/backups/portal/portal-$(date -u +%Y-%m-%d).dump
+sudo -u postgres pg_dump -Fc portal > "$f.tmp" && mv "$f.tmp" "$f"
+chmod 600 "$f"
+find /var/backups/portal -name "portal-*.dump" -mtime +14 -delete
+
+# Installed on the server as /usr/local/bin/portal-backup (root, chmod 700), run daily at 02:00 IST by
+# /etc/cron.d/portal-backup:  30 20 * * * root /usr/local/bin/portal-backup >> /var/log/portal-backup.log 2>&1
+# Restore:  sudo -u postgres pg_restore --clean --if-exists -d portal < /var/backups/portal/portal-YYYY-MM-DD.dump

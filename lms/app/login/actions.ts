@@ -3,15 +3,24 @@
 import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import { after } from "next/server";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSession, passwordProblem, requireUser } from "@/lib/auth";
 import { appUrl, sendPasswordReset } from "@/lib/notify";
+import { clearLimit, limited, TOO_MANY } from "@/lib/rate-limit";
+
+const MIN = 60 * 1000;
+/** The visitor's address, as set by nginx (the visitor can't supply X-Real-IP). */
+const clientIp = async () => (await headers()).get("x-real-ip") ?? "local";
 
 export async function login(_: string | null, form: FormData): Promise<string | null> {
   const id = String(form.get("identifier") ?? "").trim();
   const password = String(form.get("password") ?? "");
   if (!id || !password) return "Enter your Employee ID or email and password.";
+  // 5 tries per account and 100 per address (an office shares one) every 15 minutes; a successful login clears the account's count.
+  const account = `login:${id.toLowerCase()}`;
+  if (limited(`login-ip:${await clientIp()}`, 100, 15 * MIN) || limited(account, 5, 15 * MIN)) return TOO_MANY;
 
   const user = await db.user.findFirst({
     where: { OR: [{ employeeId: id.toUpperCase() }, { email: { equals: id, mode: "insensitive" } }] },
@@ -19,6 +28,7 @@ export async function login(_: string | null, form: FormData): Promise<string | 
   // Same message for unknown user and wrong password.
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) return "Invalid credentials.";
   if (!user.isActive) return "This account is deactivated. Contact HR.";
+  clearLimit(account);
 
   const session = await getSession();
   session.userId = user.id;
@@ -36,6 +46,7 @@ export async function changePassword(_: string | null, form: FormData): Promise<
   const user = await requireUser(undefined, { allowPasswordChange: true });
   const current = String(form.get("current") ?? "");
   const next = String(form.get("next") ?? "");
+  if (limited(`change:${user.id}`, 5, 15 * MIN)) return TOO_MANY;
   if (!(await bcrypt.compare(current, user.passwordHash))) return "Current password is wrong.";
   if (next !== form.get("confirm")) return "New passwords don't match.";
   if (next === current) return "New password must be different.";
@@ -57,6 +68,8 @@ const RESET_SENT = "If that account exists, a reset link is on its way to its em
 export async function requestPasswordReset(_: string | null, form: FormData): Promise<string | null> {
   const id = String(form.get("identifier") ?? "").trim();
   if (!id) return "Enter your Employee ID or email.";
+  // 3 emails per account and 10 per address an hour, so the form can't be used to flood inboxes.
+  if (limited(`reset-ip:${await clientIp()}`, 10, 60 * MIN) || limited(`reset:${id.toLowerCase()}`, 3, 60 * MIN)) return "Too many reset requests. Try again in an hour.";
   const user = await db.user.findFirst({
     where: { isActive: true, OR: [{ employeeId: id.toUpperCase() }, { email: { equals: id, mode: "insensitive" } }] },
   });
